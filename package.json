@@ -1,0 +1,32 @@
+{
+  "name": "anime-episode-release-tracker",
+  "version": "1.0.0",
+  "description": "Dashboard for anime episode releases with reminders and calendar export",
+  "main": "src/server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hemanth850/anime-episode-release-tracker.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/hemanth850/anime-episode-release-tracker/issues"
+  },
+  "homepage": "https://github.com/hemanth850/anime-episode-release-tracker#readme",
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "ical-generator": "^10.0.0",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.1"
+  }
+}
