@@ -16,7 +16,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const listAnimeStmt = db.prepare(`
-  SELECT id, title, cover_image_url AS coverImageUrl, synopsis, total_episodes AS totalEpisodes, source
+  SELECT id, title, cover_image_url AS coverImageUrl, synopsis, total_episodes AS totalEpisodes, popularity, source
   FROM anime
   ORDER BY title ASC
 `);
@@ -24,7 +24,7 @@ const listAnimeStmt = db.prepare(`
 const listUpcomingEpisodesStmt = db.prepare(`
   SELECT e.id, e.anime_id AS animeId, a.title AS animeTitle,
          e.episode_number AS episodeNumber, e.title, e.release_at AS releaseAt,
-         e.source, a.source AS animeSource
+         e.source, a.source AS animeSource, a.popularity AS animePopularity
   FROM episodes e
   JOIN anime a ON a.id = e.anime_id
   WHERE e.release_at BETWEEN ? AND ?

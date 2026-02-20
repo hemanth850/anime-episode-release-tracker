@@ -75,6 +75,7 @@ main {
   display: flex;
   gap: 0.7rem;
   align-items: end;
+  flex-wrap: wrap;
 }
 
 .panel.split {
@@ -173,15 +174,59 @@ button:hover {
 .episode-day-cards {
   display: grid;
   gap: 0.8rem;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-flow: dense;
 }
 
 .episode-card {
   border: 1px solid rgba(29, 38, 48, 0.12);
   border-radius: 12px;
-  background: #fff;
+  background: linear-gradient(165deg, #ffffff 0%, #f8fbfd 100%);
   padding: 0.75rem;
   animation: reveal 320ms ease;
+  grid-column: span 4;
+  min-height: 150px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.episode-card::after {
+  content: '';
+  position: absolute;
+  inset: auto -20% -35% 40%;
+  height: 120px;
+  border-radius: 999px;
+  background: rgba(10, 77, 104, 0.08);
+  filter: blur(18px);
+  pointer-events: none;
+}
+
+.episode-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 30px rgba(18, 50, 70, 0.14);
+  border-color: rgba(10, 77, 104, 0.3);
+}
+
+.episode-card.tile-l {
+  grid-column: span 6;
+  min-height: 190px;
+}
+
+.episode-card.tile-xl {
+  grid-column: span 8;
+  min-height: 220px;
+}
+
+.episode-card.popular-hero {
+  border-color: rgba(228, 83, 52, 0.5);
+  background: linear-gradient(160deg, #fff6ef 0%, #ffe7d9 42%, #fff9f4 100%);
+  box-shadow: 0 14px 28px rgba(228, 83, 52, 0.2);
+}
+
+.episode-card.popular-hot {
+  border-color: rgba(242, 107, 56, 0.35);
+  background: linear-gradient(170deg, #fff8f1 0%, #fff2e5 100%);
 }
 
 @keyframes reveal {
@@ -203,6 +248,31 @@ button:hover {
   background: rgba(242, 107, 56, 0.15);
   color: #963612;
   font-size: 0.78rem;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pop-badge {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #8f340f;
+  background: rgba(242, 107, 56, 0.2);
+  border: 1px solid rgba(242, 107, 56, 0.35);
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+  visibility: hidden;
+}
+
+.pop-badge:not(:empty) {
+  visibility: visible;
 }
 
 .episode-card h3 {
@@ -253,5 +323,16 @@ button:hover {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.4rem;
+  }
+
+  .episode-day-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .episode-card,
+  .episode-card.tile-l,
+  .episode-card.tile-xl {
+    grid-column: span 1;
+    min-height: 0;
   }
 }

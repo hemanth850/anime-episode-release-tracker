@@ -29,6 +29,13 @@
                 <option value="30">30 days</option>
               </select>
             </label>
+            <label>
+              Sort By
+              <select id="sortSelect">
+                <option value="release" selected>Release Time</option>
+                <option value="popularity">Popularity (High to Low)</option>
+              </select>
+            </label>
           </div>
         </div>
         <div id="episodeFilters" class="filter-row">
@@ -82,7 +89,10 @@
 
     <template id="episodeCardTemplate">
       <article class="episode-card">
-        <p class="chip"></p>
+        <div class="card-head">
+          <p class="chip"></p>
+          <p class="pop-badge"></p>
+        </div>
         <h3></h3>
         <p class="episode-title"></p>
         <p class="release-at"></p>

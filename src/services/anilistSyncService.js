@@ -10,13 +10,14 @@ function getStatements() {
 
   statements = {
     upsertAnimeStmt: db.prepare(`
-      INSERT INTO anime (title, cover_image_url, synopsis, total_episodes, source, external_id)
-      VALUES (?, ?, ?, ?, 'anilist', ?)
+      INSERT INTO anime (title, cover_image_url, synopsis, total_episodes, popularity, source, external_id)
+      VALUES (?, ?, ?, ?, ?, 'anilist', ?)
       ON CONFLICT(source, external_id) DO UPDATE SET
         title = excluded.title,
         cover_image_url = excluded.cover_image_url,
         synopsis = excluded.synopsis,
-        total_episodes = excluded.total_episodes
+        total_episodes = excluded.total_episodes,
+        popularity = excluded.popularity
     `),
     findAnimeStmt: db.prepare(`
       SELECT id
@@ -84,6 +85,7 @@ async function fetchAiringSchedulePage(page, perPage) {
             }
             description(asHtml: false)
             episodes
+            popularity
             status
           }
         }
@@ -137,12 +139,14 @@ async function runAniListSync() {
       const title = item.media.title.english || item.media.title.romaji || item.media.title.native || `Anime ${externalAnimeId}`;
       const synopsis = sanitizeText(item.media.description);
       const cover = item.media.coverImage?.large || item.media.coverImage?.medium || null;
+      const popularity = Number(item.media.popularity) || 0;
 
       const upsertAnimeResult = upsertAnimeStmt.run(
         title,
         cover,
         synopsis,
         item.media.episodes || null,
+        popularity,
         externalAnimeId
       );
 

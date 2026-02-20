@@ -29,6 +29,7 @@ function initDb() {
       cover_image_url TEXT,
       synopsis TEXT,
       total_episodes INTEGER,
+      popularity INTEGER NOT NULL DEFAULT 0,
       source TEXT NOT NULL DEFAULT 'local',
       external_id TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -81,6 +82,7 @@ function initDb() {
 
   ensureColumn('anime', 'source', "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn('anime', 'external_id', 'TEXT');
+  ensureColumn('anime', 'popularity', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn('episodes', 'source', "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn('episodes', 'external_id', 'TEXT');
 
@@ -100,8 +102,8 @@ function initDb() {
 function seedData() {
   const now = new Date();
   const animeInsert = db.prepare(`
-    INSERT INTO anime (title, cover_image_url, synopsis, total_episodes, source)
-    VALUES (?, ?, ?, ?, 'local')
+    INSERT INTO anime (title, cover_image_url, synopsis, total_episodes, popularity, source)
+    VALUES (?, ?, ?, ?, ?, 'local')
   `);
 
   const episodeInsert = db.prepare(`
@@ -115,6 +117,7 @@ function seedData() {
       cover: 'https://images.unsplash.com/photo-1519861531473-9200262188bf?w=640&q=80&auto=format&fit=crop',
       synopsis: 'A fallen knight and a rogue pilot chase relics hidden above a floating archipelago.',
       totalEpisodes: 12,
+      popularity: 7600,
       days: [1, 8, 15],
     },
     {
@@ -122,6 +125,7 @@ function seedData() {
       cover: 'https://images.unsplash.com/photo-1543353071-10c8ba85a904?w=640&q=80&auto=format&fit=crop',
       synopsis: 'Three students solve city mysteries one midnight ramen stall at a time.',
       totalEpisodes: 10,
+      popularity: 5300,
       days: [3, 10, 17],
     },
     {
@@ -129,13 +133,20 @@ function seedData() {
       cover: 'https://images.unsplash.com/photo-1517336714739-489689fd1ca8?w=640&q=80&auto=format&fit=crop',
       synopsis: 'A watchmaker binds a mechanical spirit to reverse a timeline fracture.',
       totalEpisodes: 13,
+      popularity: 4100,
       days: [2, 9, 16],
     },
   ];
 
   const tx = db.transaction(() => {
     for (const anime of animes) {
-      const result = animeInsert.run(anime.title, anime.cover, anime.synopsis, anime.totalEpisodes);
+      const result = animeInsert.run(
+        anime.title,
+        anime.cover,
+        anime.synopsis,
+        anime.totalEpisodes,
+        anime.popularity
+      );
       const animeId = result.lastInsertRowid;
 
       anime.days.forEach((offset, index) => {
