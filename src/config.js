@@ -16,4 +16,9 @@ module.exports = {
     pass: process.env.SMTP_PASS || '',
     from: process.env.SMTP_FROM || 'anime-tracker@example.com',
   },
+  anilist: {
+    syncCron: process.env.ANILIST_SYNC_CRON || '15 */6 * * *',
+    pageLimit: Math.max(1, Math.min(10, number(process.env.ANILIST_PAGE_LIMIT, 3))),
+    perPage: Math.max(10, Math.min(50, number(process.env.ANILIST_PER_PAGE, 50))),
+  },
 };
