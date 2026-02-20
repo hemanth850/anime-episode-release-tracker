@@ -1,17 +1,19 @@
-# Anime Episode Release Tracker
+﻿# Anime Episode Release Tracker
 
-Dashboard showing upcoming anime episode releases, live countdowns, reminder automation, and calendar export.
+Dashboard showing upcoming anime episode releases, live countdowns, reminders, and calendar export.
 
-## Phase 1 (Implemented)
+## Phase 1 + Phase 2 (Implemented)
 - Full-stack app with Express + SQLite
-- Upcoming episodes API and dashboard cards
-- Live countdown timers in UI
-- Reminder creation with:
-  - Email notifications (SMTP)
-  - Discord webhook notifications
-- Background scheduler (runs every minute)
+- Upcoming episode dashboard with live countdowns
+- Reminder automation via email (SMTP) and Discord webhooks
+- Background jobs:
+  - reminder dispatch every minute
+  - AniList sync on startup + cron schedule
+- Real upstream sync from AniList GraphQL airing schedule
+- Manual sync button in dashboard
+- Sync status API + UI feedback
 - `.ics` calendar export endpoint
-- Seeded sample anime/episode data
+- Seeded local demo data (kept alongside synced data)
 
 ## Stack
 - Backend: Node.js, Express, better-sqlite3, node-cron, nodemailer, ical-generator
@@ -31,8 +33,7 @@ Dashboard showing upcoming anime episode releases, live countdowns, reminder aut
    ```bash
    npm run dev
    ```
-4. Open:
-   - App: http://localhost:4000
+4. Open `http://localhost:4000`
 
 ## Environment Variables
 See `.env.example`.
@@ -40,7 +41,10 @@ See `.env.example`.
 - `PORT`: API/web server port
 - `DB_PATH`: SQLite file path
 - `APP_BASE_URL`: Base URL used in calendar events
-- `SMTP_*`: Optional email transport settings. If omitted, email reminders run in dry-run mode (logged to console).
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`: Optional email settings
+- `ANILIST_SYNC_CRON`: Cron for background AniList sync (default `15 */6 * * *`)
+- `ANILIST_PAGE_LIMIT`: Number of AniList pages to fetch per sync (default `3`)
+- `ANILIST_PER_PAGE`: Items per AniList page (default `50`, max `50`)
 
 ## API Endpoints
 - `GET /api/health`
@@ -49,16 +53,18 @@ See `.env.example`.
 - `GET /api/reminders`
 - `POST /api/reminders`
 - `DELETE /api/reminders/:id`
-- `POST /api/jobs/reminders/run` (manual trigger)
+- `POST /api/jobs/reminders/run`
+- `GET /api/sync/status`
+- `POST /api/sync/anilist`
 - `GET /api/calendar.ics`
 
 ## Notes
-- Reminder scheduler scans every minute.
-- For real reminders, configure SMTP and/or provide valid Discord webhook URLs.
-- Current data is seeded demo content; next phase can integrate real anime schedule providers.
+- Reminder emails run in dry-run log mode unless SMTP is configured.
+- AniList sync writes anime/episodes with `source='anilist'` and upserts by external IDs.
+- Local seeded data remains available (`source='local'`).
 
-## Suggested Phase 2
-- Add auth + per-user reminders
-- Integrate real schedule source (AniList/Jikan)
-- Add timezone preferences and recurring sync jobs
-- Docker + deployment template
+## Suggested Phase 3
+- User auth and per-user subscriptions
+- Timezone preferences per user
+- Docker + deployment configuration
+- Tests (API + sync service)

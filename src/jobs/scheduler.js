@@ -1,6 +1,8 @@
 const cron = require('node-cron');
 
+const config = require('../config');
 const { db } = require('../db');
+const { runAniListSyncSafe } = require('../services/anilistSyncService');
 const { sendEmailReminder } = require('../services/emailService');
 const { sendDiscordReminder } = require('../services/discordService');
 
@@ -90,6 +92,16 @@ function startScheduler() {
 
   runReminderScan().catch((error) => {
     console.error('Initial reminder scan failed:', error.message);
+  });
+
+  cron.schedule(config.anilist.syncCron, () => {
+    runAniListSyncSafe().catch((error) => {
+      console.error('AniList sync failed:', error.message);
+    });
+  });
+
+  runAniListSyncSafe().catch((error) => {
+    console.error('Initial AniList sync failed:', error.message);
   });
 }
 

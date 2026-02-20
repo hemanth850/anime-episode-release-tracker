@@ -116,6 +116,14 @@ button:hover {
   background: #07374b;
 }
 
+.secondary {
+  background: #35607f;
+}
+
+.secondary:hover {
+  background: #25455b;
+}
+
 .muted {
   color: var(--muted);
   font-size: 0.9rem;

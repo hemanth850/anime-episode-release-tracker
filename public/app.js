@@ -1,7 +1,8 @@
-const state = {
+﻿const state = {
   anime: [],
   episodes: [],
   reminders: [],
+  syncStatus: null,
 };
 
 const elements = {
@@ -11,6 +12,8 @@ const elements = {
   reminderForm: document.getElementById('reminderForm'),
   remindersList: document.getElementById('remindersList'),
   calendarBtn: document.getElementById('calendarBtn'),
+  syncBtn: document.getElementById('syncBtn'),
+  syncStatus: document.getElementById('syncStatus'),
 };
 
 function timeUntil(dateIso) {
@@ -47,7 +50,7 @@ function renderAnimeSelect() {
   state.anime.forEach((anime) => {
     const option = document.createElement('option');
     option.value = anime.id;
-    option.textContent = anime.title;
+    option.textContent = `${anime.title}${anime.source === 'anilist' ? ' (AniList)' : ''}`;
     elements.animeSelect.appendChild(option);
   });
 }
@@ -66,8 +69,9 @@ function renderEpisodes() {
     const card = fragment.querySelector('.episode-card');
     card.dataset.releaseAt = episode.releaseAt;
 
-    fragment.querySelector('.chip').textContent = `#${index + 1} in queue`;
-    fragment.querySelector('h3').textContent = `${episode.animeTitle} � Ep ${episode.episodeNumber}`;
+    const sourceLabel = episode.source === 'anilist' ? 'AniList' : 'Local';
+    fragment.querySelector('.chip').textContent = `#${index + 1} in queue · ${sourceLabel}`;
+    fragment.querySelector('h3').textContent = `${episode.animeTitle} · Ep ${episode.episodeNumber}`;
     fragment.querySelector('.episode-title').textContent = episode.title;
     fragment.querySelector('.release-at').textContent = `Release: ${new Date(episode.releaseAt).toLocaleString()}`;
     fragment.querySelector('.countdown').textContent = `Countdown: ${timeUntil(episode.releaseAt)}`;
@@ -120,6 +124,30 @@ function renderReminders() {
   });
 }
 
+function renderSyncStatus() {
+  if (!state.syncStatus) {
+    elements.syncStatus.textContent = 'Sync status unavailable.';
+    return;
+  }
+
+  const { lastSyncAt, lastResult, lastError } = state.syncStatus;
+  if (lastError) {
+    elements.syncStatus.textContent = `Last sync error: ${lastError}`;
+    return;
+  }
+
+  if (!lastSyncAt) {
+    elements.syncStatus.textContent = 'No AniList sync has run yet.';
+    return;
+  }
+
+  const synced = new Date(lastSyncAt).toLocaleString();
+  const details = lastResult
+    ? `Rows: ${lastResult.fetchedRows}, episodes synced: ${lastResult.syncedEpisodes}`
+    : 'Completed.';
+  elements.syncStatus.textContent = `Last sync: ${synced}. ${details}`;
+}
+
 async function loadAnime() {
   state.anime = await api('/api/anime');
   renderAnimeSelect();
@@ -134,6 +162,11 @@ async function loadEpisodes() {
 async function loadReminders() {
   state.reminders = await api('/api/reminders');
   renderReminders();
+}
+
+async function loadSyncStatus() {
+  state.syncStatus = await api('/api/sync/status');
+  renderSyncStatus();
 }
 
 function registerEvents() {
@@ -168,11 +201,27 @@ function registerEvents() {
     const url = animeId ? `/api/calendar.ics?animeId=${animeId}` : '/api/calendar.ics';
     window.location.href = url;
   });
+
+  elements.syncBtn.addEventListener('click', async () => {
+    elements.syncBtn.disabled = true;
+    elements.syncBtn.textContent = 'Syncing...';
+
+    try {
+      await api('/api/sync/anilist', { method: 'POST' });
+      await Promise.all([loadAnime(), loadEpisodes(), loadSyncStatus()]);
+    } catch (error) {
+      alert(error.message);
+      await loadSyncStatus();
+    } finally {
+      elements.syncBtn.disabled = false;
+      elements.syncBtn.textContent = 'Sync from AniList';
+    }
+  });
 }
 
 async function bootstrap() {
   registerEvents();
-  await Promise.all([loadAnime(), loadEpisodes(), loadReminders()]);
+  await Promise.all([loadAnime(), loadEpisodes(), loadReminders(), loadSyncStatus()]);
   setInterval(refreshCountdowns, 1000 * 30);
 }
 

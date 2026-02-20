@@ -6,6 +6,7 @@ const ical = require('ical-generator').default;
 const config = require('./config');
 const { db, initDb } = require('./db');
 const { startScheduler, runReminderScan } = require('./jobs/scheduler');
+const { runAniListSyncSafe, getAniListSyncStatus } = require('./services/anilistSyncService');
 
 initDb();
 
@@ -15,14 +16,15 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const listAnimeStmt = db.prepare(`
-  SELECT id, title, cover_image_url AS coverImageUrl, synopsis, total_episodes AS totalEpisodes
+  SELECT id, title, cover_image_url AS coverImageUrl, synopsis, total_episodes AS totalEpisodes, source
   FROM anime
   ORDER BY title ASC
 `);
 
 const listUpcomingEpisodesStmt = db.prepare(`
   SELECT e.id, e.anime_id AS animeId, a.title AS animeTitle,
-         e.episode_number AS episodeNumber, e.title, e.release_at AS releaseAt
+         e.episode_number AS episodeNumber, e.title, e.release_at AS releaseAt,
+         e.source, a.source AS animeSource
   FROM episodes e
   JOIN anime a ON a.id = e.anime_id
   WHERE e.release_at BETWEEN ? AND ?
@@ -93,6 +95,19 @@ app.delete('/api/reminders/:id', (req, res) => {
 app.post('/api/jobs/reminders/run', async (_, res) => {
   await runReminderScan();
   res.json({ ok: true });
+});
+
+app.get('/api/sync/status', (_, res) => {
+  res.json(getAniListSyncStatus());
+});
+
+app.post('/api/sync/anilist', async (_, res) => {
+  try {
+    const result = await runAniListSyncSafe();
+    return res.json({ ok: true, result });
+  } catch (error) {
+    return res.status(502).json({ error: `Sync failed: ${error.message}` });
+  }
 });
 
 app.get('/api/calendar.ics', (req, res) => {
