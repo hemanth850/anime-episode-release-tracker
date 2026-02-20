@@ -3,11 +3,13 @@
   episodes: [],
   reminders: [],
   syncStatus: null,
+  episodeFilter: '24h',
 };
 
 const elements = {
   daysSelect: document.getElementById('daysSelect'),
   episodesGrid: document.getElementById('episodesGrid'),
+  episodeFilters: document.getElementById('episodeFilters'),
   animeSelect: document.getElementById('animeSelect'),
   reminderForm: document.getElementById('reminderForm'),
   remindersList: document.getElementById('remindersList'),
@@ -26,6 +28,65 @@ function timeUntil(dateIso) {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
 
   return `${days}d ${hours}h ${minutes}m`;
+}
+
+function toDateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function isTomorrow(date) {
+  const tomorrow = new Date();
+  tomorrow.setHours(0, 0, 0, 0);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const nextDay = new Date(tomorrow);
+  nextDay.setDate(nextDay.getDate() + 1);
+
+  return date >= tomorrow && date < nextDay;
+}
+
+function filterEpisodes() {
+  const now = Date.now();
+
+  return state.episodes.filter((episode) => {
+    const release = new Date(episode.releaseAt).getTime();
+    if (release < now) return false;
+
+    const diffMs = release - now;
+    switch (state.episodeFilter) {
+      case '24h':
+        return diffMs <= 24 * 60 * 60 * 1000;
+      case 'tomorrow':
+        return isTomorrow(new Date(release));
+      case '3d':
+        return diffMs <= 3 * 24 * 60 * 60 * 1000;
+      case '7d':
+        return diffMs <= 7 * 24 * 60 * 60 * 1000;
+      case 'all':
+      default:
+        return true;
+    }
+  });
+}
+
+function groupEpisodesByDay(episodes) {
+  const groups = new Map();
+
+  episodes.forEach((episode) => {
+    const release = new Date(episode.releaseAt);
+    const key = toDateKey(release);
+
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+
+    groups.get(key).push(episode);
+  });
+
+  return groups;
 }
 
 async function api(path, options) {
@@ -58,25 +119,47 @@ function renderAnimeSelect() {
 function renderEpisodes() {
   elements.episodesGrid.innerHTML = '';
   const template = document.getElementById('episodeCardTemplate');
+  const filtered = filterEpisodes();
 
-  if (!state.episodes.length) {
-    elements.episodesGrid.innerHTML = '<p class="muted">No episodes in this time window.</p>';
+  if (!filtered.length) {
+    elements.episodesGrid.innerHTML = '<p class="muted">No episodes match this filter.</p>';
     return;
   }
 
-  state.episodes.forEach((episode, index) => {
-    const fragment = template.content.cloneNode(true);
-    const card = fragment.querySelector('.episode-card');
-    card.dataset.releaseAt = episode.releaseAt;
+  const groups = groupEpisodesByDay(filtered);
 
-    const sourceLabel = episode.source === 'anilist' ? 'AniList' : 'Local';
-    fragment.querySelector('.chip').textContent = `#${index + 1} in queue · ${sourceLabel}`;
-    fragment.querySelector('h3').textContent = `${episode.animeTitle} · Ep ${episode.episodeNumber}`;
-    fragment.querySelector('.episode-title').textContent = episode.title;
-    fragment.querySelector('.release-at').textContent = `Release: ${new Date(episode.releaseAt).toLocaleString()}`;
-    fragment.querySelector('.countdown').textContent = `Countdown: ${timeUntil(episode.releaseAt)}`;
+  Array.from(groups.entries()).forEach(([dateKey, groupEpisodes]) => {
+    const group = document.createElement('section');
+    group.className = 'episode-day-group';
 
-    elements.episodesGrid.appendChild(fragment);
+    const heading = document.createElement('h3');
+    heading.textContent = new Date(`${dateKey}T00:00:00`).toLocaleDateString(undefined, {
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric',
+    });
+
+    const cards = document.createElement('div');
+    cards.className = 'episode-day-cards';
+
+    groupEpisodes.forEach((episode, index) => {
+      const fragment = template.content.cloneNode(true);
+      const card = fragment.querySelector('.episode-card');
+      card.dataset.releaseAt = episode.releaseAt;
+
+      const sourceLabel = episode.source === 'anilist' ? 'AniList' : 'Local';
+      fragment.querySelector('.chip').textContent = `#${index + 1} · ${sourceLabel}`;
+      fragment.querySelector('h3').textContent = `${episode.animeTitle} · Ep ${episode.episodeNumber}`;
+      fragment.querySelector('.episode-title').textContent = episode.title;
+      fragment.querySelector('.release-at').textContent = `Release: ${new Date(episode.releaseAt).toLocaleString()}`;
+      fragment.querySelector('.countdown').textContent = `Countdown: ${timeUntil(episode.releaseAt)}`;
+
+      cards.appendChild(fragment);
+    });
+
+    group.appendChild(heading);
+    group.appendChild(cards);
+    elements.episodesGrid.appendChild(group);
   });
 }
 
@@ -148,6 +231,15 @@ function renderSyncStatus() {
   elements.syncStatus.textContent = `Last sync: ${synced}. ${details}`;
 }
 
+function setEpisodeFilter(filterValue) {
+  state.episodeFilter = filterValue;
+  const chips = elements.episodeFilters.querySelectorAll('.filter-chip');
+  chips.forEach((chip) => {
+    chip.classList.toggle('active', chip.dataset.filter === filterValue);
+  });
+  renderEpisodes();
+}
+
 async function loadAnime() {
   state.anime = await api('/api/anime');
   renderAnimeSelect();
@@ -171,6 +263,13 @@ async function loadSyncStatus() {
 
 function registerEvents() {
   elements.daysSelect.addEventListener('change', loadEpisodes);
+
+  elements.episodeFilters.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLButtonElement)) return;
+    if (!target.dataset.filter) return;
+    setEpisodeFilter(target.dataset.filter);
+  });
 
   elements.reminderForm.addEventListener('submit', async (event) => {
     event.preventDefault();

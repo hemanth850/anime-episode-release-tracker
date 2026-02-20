@@ -71,6 +71,12 @@ main {
   align-items: center;
 }
 
+.episode-controls {
+  display: flex;
+  gap: 0.7rem;
+  align-items: end;
+}
+
 .panel.split {
   display: grid;
   gap: 1rem;
@@ -129,8 +135,42 @@ button:hover {
   font-size: 0.9rem;
 }
 
+.filter-row {
+  margin-top: 0.8rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.filter-chip {
+  background: #e9eef2;
+  color: #1f3647;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid transparent;
+}
+
+.filter-chip:hover {
+  background: #d5e1e8;
+}
+
+.filter-chip.active {
+  background: #1d4f6d;
+  color: #fff;
+}
+
 .episodes-grid {
   margin-top: 0.9rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.episode-day-group h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: #18445e;
+}
+
+.episode-day-cards {
   display: grid;
   gap: 0.8rem;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
