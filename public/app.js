@@ -1,4 +1,5 @@
 ﻿const AUTH_TOKEN_KEY = 'animeTrackerAuthToken';
+const THEME_KEY = 'animeTrackerTheme';
 
 const state = {
   anime: [],
@@ -31,6 +32,7 @@ const elements = {
   authStatus: document.getElementById('authStatus'),
   authSubmitBtn: document.getElementById('authSubmitBtn'),
   logoutBtn: document.getElementById('logoutBtn'),
+  themeSelect: document.getElementById('themeSelect'),
 };
 
 function timeUntil(dateIso) {
@@ -137,6 +139,17 @@ function renderEpisodeCard(episode, index) {
 
   const sourceLabel = episode.source === 'anilist' ? 'AniList' : 'Local';
   const popularity = Number(episode.animePopularity) || 0;
+  const posterImg = fragment.querySelector('.poster-img');
+  const posterWrap = fragment.querySelector('.poster-wrap');
+  if (episode.animeCoverImage) {
+    posterImg.src = episode.animeCoverImage;
+    posterImg.alt = `${episode.animeTitle} poster`;
+  } else {
+    posterWrap.classList.add('empty');
+    posterImg.removeAttribute('src');
+    posterImg.alt = '';
+  }
+
   fragment.querySelector('.chip').textContent = `#${index + 1} · ${sourceLabel}`;
   fragment.querySelector('.pop-badge').textContent = '';
   fragment.querySelector('h3').textContent = `${episode.animeTitle} · Ep ${episode.episodeNumber}`;
@@ -218,6 +231,13 @@ function persistToken(token) {
   } else {
     localStorage.removeItem(AUTH_TOKEN_KEY);
   }
+}
+
+function applyTheme(theme) {
+  const selected = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', selected);
+  localStorage.setItem(THEME_KEY, selected);
+  elements.themeSelect.value = selected;
 }
 
 function clearSession() {
@@ -437,6 +457,9 @@ function registerEvents() {
   elements.sortSelect.addEventListener('change', (event) => {
     setEpisodeSort(event.target.value);
   });
+  elements.themeSelect.addEventListener('change', (event) => {
+    applyTheme(event.target.value);
+  });
 
   elements.authMode.addEventListener('change', (event) => {
     setAuthMode(event.target.value);
@@ -539,6 +562,7 @@ function registerEvents() {
 
 async function bootstrap() {
   registerEvents();
+  applyTheme(localStorage.getItem(THEME_KEY) || 'dark');
   setAuthMode(elements.authMode.value);
   await ensureAuthSession();
   await Promise.all([loadAnime(), loadEpisodes(), loadReminders(), loadSyncStatus()]);
@@ -549,3 +573,4 @@ bootstrap().catch((error) => {
   console.error(error);
   alert('Failed to load dashboard. Check server logs.');
 });
+

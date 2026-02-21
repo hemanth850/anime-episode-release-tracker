@@ -14,6 +14,15 @@
     <header>
       <h1>Anime Episode Release Tracker</h1>
       <p>Track upcoming drops, countdown to release time, and automate reminders.</p>
+      <div class="theme-control">
+        <label>
+          Theme
+          <select id="themeSelect">
+            <option value="dark" selected>Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </label>
+      </div>
     </header>
 
     <main>
@@ -119,6 +128,9 @@
 
     <template id="episodeCardTemplate">
       <article class="episode-card">
+        <div class="poster-wrap">
+          <img class="poster-img" alt="" loading="lazy" />
+        </div>
         <div class="card-head">
           <p class="chip"></p>
           <p class="pop-badge"></p>

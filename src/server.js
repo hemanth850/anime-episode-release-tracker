@@ -25,7 +25,8 @@ const listAnimeStmt = db.prepare(`
 const listUpcomingEpisodesStmt = db.prepare(`
   SELECT e.id, e.anime_id AS animeId, a.title AS animeTitle,
          e.episode_number AS episodeNumber, e.title, e.release_at AS releaseAt,
-         e.source, a.source AS animeSource, a.popularity AS animePopularity
+         e.source, a.source AS animeSource, a.popularity AS animePopularity,
+         a.cover_image_url AS animeCoverImage
   FROM episodes e
   JOIN anime a ON a.id = e.anime_id
   WHERE e.release_at BETWEEN ? AND ?
