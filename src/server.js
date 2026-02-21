@@ -7,6 +7,7 @@ const config = require('./config');
 const { db, initDb } = require('./db');
 const { startScheduler, runReminderScan } = require('./jobs/scheduler');
 const { runAniListSyncSafe, getAniListSyncStatus } = require('./services/anilistSyncService');
+const { hashPassword, verifyPassword, createSessionToken } = require('./services/authService');
 
 initDb();
 
@@ -31,9 +32,36 @@ const listUpcomingEpisodesStmt = db.prepare(`
   ORDER BY e.release_at ASC
 `);
 
+const createUserStmt = db.prepare(`
+  INSERT INTO users (email, password_hash, display_name, timezone)
+  VALUES (?, ?, ?, 'UTC')
+`);
+
+const findUserByEmailStmt = db.prepare(`
+  SELECT id, email, password_hash AS passwordHash, display_name AS displayName, timezone, created_at AS createdAt
+  FROM users
+  WHERE email = ?
+`);
+
+const createSessionStmt = db.prepare(`
+  INSERT INTO user_sessions (token, user_id, expires_at)
+  VALUES (?, ?, ?)
+`);
+
+const findSessionUserStmt = db.prepare(`
+  SELECT u.id, u.email, u.display_name AS displayName, u.timezone,
+         s.token, s.expires_at AS expiresAt
+  FROM user_sessions s
+  JOIN users u ON u.id = s.user_id
+  WHERE s.token = ?
+`);
+
+const deleteSessionStmt = db.prepare('DELETE FROM user_sessions WHERE token = ?');
+const deleteExpiredSessionsStmt = db.prepare('DELETE FROM user_sessions WHERE expires_at <= ?');
+
 const insertReminderStmt = db.prepare(`
-  INSERT INTO reminders (anime_id, email, discord_webhook_url, minutes_before)
-  VALUES (?, ?, ?, ?)
+  INSERT INTO reminders (user_id, anime_id, email, discord_webhook_url, minutes_before)
+  VALUES (?, ?, ?, ?, ?)
 `);
 
 const listRemindersStmt = db.prepare(`
@@ -42,13 +70,131 @@ const listRemindersStmt = db.prepare(`
          r.minutes_before AS minutesBefore, r.is_active AS isActive, r.created_at AS createdAt
   FROM reminders r
   LEFT JOIN anime a ON a.id = r.anime_id
+  WHERE r.user_id = ?
   ORDER BY r.created_at DESC
 `);
 
-const deleteReminderStmt = db.prepare('DELETE FROM reminders WHERE id = ?');
+const deleteReminderByUserStmt = db.prepare('DELETE FROM reminders WHERE id = ? AND user_id = ?');
+
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+function createSessionForUser(userId) {
+  const token = createSessionToken();
+  const expiresAt = new Date(Date.now() + config.auth.sessionDays * 24 * 60 * 60 * 1000).toISOString();
+  createSessionStmt.run(token, userId, expiresAt);
+  return { token, expiresAt };
+}
+
+function sanitizeUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    timezone: user.timezone,
+  };
+}
+
+function getBearerToken(req) {
+  const authHeader = req.header('authorization') || '';
+  const [scheme, token] = authHeader.split(' ');
+  if (!scheme || scheme.toLowerCase() !== 'bearer' || !token) return null;
+  return token.trim();
+}
+
+function getCurrentUserFromRequest(req) {
+  deleteExpiredSessionsStmt.run(new Date().toISOString());
+
+  const token = getBearerToken(req);
+  if (!token) return null;
+
+  const row = findSessionUserStmt.get(token);
+  if (!row) return null;
+
+  if (new Date(row.expiresAt).getTime() <= Date.now()) {
+    deleteSessionStmt.run(token);
+    return null;
+  }
+
+  return {
+    ...sanitizeUser(row),
+    token,
+  };
+}
+
+function requireAuth(req, res, next) {
+  const user = getCurrentUserFromRequest(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+
+  req.user = user;
+  return next();
+}
 
 app.get('/api/health', (_, res) => {
   res.json({ ok: true, now: new Date().toISOString() });
+});
+
+app.post('/api/auth/register', (req, res) => {
+  const email = normalizeEmail(req.body.email);
+  const password = String(req.body.password || '');
+  const displayName = String(req.body.displayName || '').trim();
+
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'Enter a valid email address.' });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+
+  if (displayName.length < 2) {
+    return res.status(400).json({ error: 'Display name must be at least 2 characters.' });
+  }
+
+  const existing = findUserByEmailStmt.get(email);
+  if (existing) {
+    return res.status(409).json({ error: 'Email already exists.' });
+  }
+
+  const passwordHash = hashPassword(password);
+  const result = createUserStmt.run(email, passwordHash, displayName);
+  const session = createSessionForUser(result.lastInsertRowid);
+  const user = findSessionUserStmt.get(session.token);
+
+  return res.status(201).json({
+    token: session.token,
+    expiresAt: session.expiresAt,
+    user: sanitizeUser(user),
+  });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const email = normalizeEmail(req.body.email);
+  const password = String(req.body.password || '');
+
+  const user = findUserByEmailStmt.get(email);
+  if (!user || !verifyPassword(password, user.passwordHash)) {
+    return res.status(401).json({ error: 'Invalid email or password.' });
+  }
+
+  const session = createSessionForUser(user.id);
+  return res.json({
+    token: session.token,
+    expiresAt: session.expiresAt,
+    user: sanitizeUser(user),
+  });
+});
+
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  res.json({ user: req.user });
+});
+
+app.post('/api/auth/logout', requireAuth, (req, res) => {
+  deleteSessionStmt.run(req.user.token);
+  res.status(204).send();
 });
 
 app.get('/api/anime', (_, res) => {
@@ -64,7 +210,7 @@ app.get('/api/episodes/upcoming', (req, res) => {
   res.json(rows);
 });
 
-app.post('/api/reminders', (req, res) => {
+app.post('/api/reminders', requireAuth, (req, res) => {
   const animeId = req.body.animeId ? Number(req.body.animeId) : null;
   const email = req.body.email ? String(req.body.email).trim() : null;
   const discordWebhookUrl = req.body.discordWebhookUrl ? String(req.body.discordWebhookUrl).trim() : null;
@@ -74,18 +220,18 @@ app.post('/api/reminders', (req, res) => {
     return res.status(400).json({ error: 'Provide at least one channel: email or Discord webhook URL.' });
   }
 
-  const result = insertReminderStmt.run(animeId, email, discordWebhookUrl, minutesBefore);
+  const result = insertReminderStmt.run(req.user.id, animeId, email, discordWebhookUrl, minutesBefore);
   const reminder = db.prepare('SELECT * FROM reminders WHERE id = ?').get(result.lastInsertRowid);
   return res.status(201).json(reminder);
 });
 
-app.get('/api/reminders', (_, res) => {
-  res.json(listRemindersStmt.all());
+app.get('/api/reminders', requireAuth, (req, res) => {
+  res.json(listRemindersStmt.all(req.user.id));
 });
 
-app.delete('/api/reminders/:id', (req, res) => {
+app.delete('/api/reminders/:id', requireAuth, (req, res) => {
   const id = Number(req.params.id);
-  const result = deleteReminderStmt.run(id);
+  const result = deleteReminderByUserStmt.run(id, req.user.id);
   if (!result.changes) {
     return res.status(404).json({ error: 'Reminder not found.' });
   }

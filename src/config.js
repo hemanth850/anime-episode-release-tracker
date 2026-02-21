@@ -21,4 +21,7 @@ module.exports = {
     pageLimit: Math.max(1, Math.min(10, number(process.env.ANILIST_PAGE_LIMIT, 3))),
     perPage: Math.max(10, Math.min(50, number(process.env.ANILIST_PER_PAGE, 50))),
   },
+  auth: {
+    sessionDays: Math.max(1, Math.min(180, number(process.env.AUTH_SESSION_DAYS, 30))),
+  },
 };

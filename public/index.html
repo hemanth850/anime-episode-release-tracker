@@ -50,6 +50,36 @@
 
       <section class="panel split">
         <div>
+          <h2>Account</h2>
+          <div id="authPanel">
+            <p id="authStatus" class="muted"></p>
+            <form id="authForm">
+              <label>
+                Mode
+                <select id="authMode">
+                  <option value="login">Login</option>
+                  <option value="register">Register</option>
+                </select>
+              </label>
+              <label id="displayNameWrap" class="hidden">
+                Display name
+                <input id="displayName" type="text" placeholder="Your name" />
+              </label>
+              <label>
+                Email
+                <input id="authEmail" type="email" placeholder="you@example.com" required />
+              </label>
+              <label>
+                Password
+                <input id="authPassword" type="password" placeholder="At least 8 characters" required />
+              </label>
+              <div class="inline-actions">
+                <button type="submit" id="authSubmitBtn">Continue</button>
+                <button type="button" class="secondary" id="logoutBtn">Logout</button>
+              </div>
+            </form>
+          </div>
+
           <h2>Create Reminder</h2>
           <form id="reminderForm">
             <label>

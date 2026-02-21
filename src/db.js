@@ -50,6 +50,7 @@ function initDb() {
 
     CREATE TABLE IF NOT EXISTS reminders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
       anime_id INTEGER,
       email TEXT,
       discord_webhook_url TEXT,
@@ -57,6 +58,23 @@ function initDb() {
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (anime_id) REFERENCES anime(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      timezone TEXT NOT NULL DEFAULT 'UTC',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS notification_log (
@@ -85,12 +103,16 @@ function initDb() {
   ensureColumn('anime', 'popularity', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn('episodes', 'source', "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn('episodes', 'external_id', 'TEXT');
+  ensureColumn('reminders', 'user_id', 'INTEGER');
 
   db.exec(`
     DROP INDEX IF EXISTS idx_anime_source_external;
     DROP INDEX IF EXISTS idx_episode_source_external;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_anime_source_external ON anime(source, external_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_episode_source_external ON episodes(source, external_id);
+    CREATE INDEX IF NOT EXISTS idx_reminders_user ON reminders(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at);
   `);
 
   const animeCount = db.prepare('SELECT COUNT(*) AS count FROM anime').get().count;
