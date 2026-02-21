@@ -13,8 +13,9 @@ function getStatements() {
 
   statements = {
     selectReminders: db.prepare(`
-      SELECT r.*, a.title AS anime_title
+      SELECT r.*, u.email AS user_email, a.title AS anime_title
       FROM reminders r
+      JOIN users u ON u.id = r.user_id
       LEFT JOIN anime a ON a.id = r.anime_id
       WHERE r.is_active = 1
     `),
@@ -62,9 +63,10 @@ async function runReminderScan() {
 
       const message = `${episode.anime_title} - Episode ${episode.episode_number} releases at ${releaseAt.toUTCString()}.`;
 
-      if (reminder.email && !wasSentStmt.get(reminder.id, episode.id, 'email')) {
+      const emailTarget = reminder.email || reminder.user_email;
+      if (emailTarget && !wasSentStmt.get(reminder.id, episode.id, 'email')) {
         try {
-          await sendEmailReminder(reminder.email, 'Anime Episode Reminder', message);
+          await sendEmailReminder(emailTarget, 'Anime Episode Reminder', message);
           insertLogStmt.run(reminder.id, episode.id, 'email');
         } catch (error) {
           console.error('Failed to send email reminder:', error.message);

@@ -1,10 +1,14 @@
-﻿const state = {
+﻿const AUTH_TOKEN_KEY = 'animeTrackerAuthToken';
+
+const state = {
   anime: [],
   episodes: [],
   reminders: [],
   syncStatus: null,
   episodeFilter: '24h',
   episodeSort: 'release',
+  authToken: localStorage.getItem(AUTH_TOKEN_KEY) || '',
+  user: null,
 };
 
 const elements = {
@@ -18,6 +22,15 @@ const elements = {
   calendarBtn: document.getElementById('calendarBtn'),
   syncBtn: document.getElementById('syncBtn'),
   syncStatus: document.getElementById('syncStatus'),
+  authForm: document.getElementById('authForm'),
+  authMode: document.getElementById('authMode'),
+  displayNameWrap: document.getElementById('displayNameWrap'),
+  displayName: document.getElementById('displayName'),
+  authEmail: document.getElementById('authEmail'),
+  authPassword: document.getElementById('authPassword'),
+  authStatus: document.getElementById('authStatus'),
+  authSubmitBtn: document.getElementById('authSubmitBtn'),
+  logoutBtn: document.getElementById('logoutBtn'),
 };
 
 function timeUntil(dateIso) {
@@ -171,15 +184,64 @@ function assignPopularityTileClasses(container, episodes) {
   });
 }
 
-async function api(path, options) {
-  const response = await fetch(path, options);
+async function api(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (state.authToken) {
+    headers.set('Authorization', `Bearer ${state.authToken}`);
+  }
+
+  const response = await fetch(path, {
+    ...options,
+    headers,
+  });
+
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
+
+    if (response.status === 401 && state.authToken) {
+      clearSession();
+      renderAuthState();
+      renderReminders();
+    }
+
     throw new Error(body.error || `Request failed: ${response.status}`);
   }
 
   if (response.status === 204) return null;
   return response.json();
+}
+
+function persistToken(token) {
+  state.authToken = token;
+  if (token) {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+}
+
+function clearSession() {
+  persistToken('');
+  state.user = null;
+  state.reminders = [];
+}
+
+function renderAuthState() {
+  if (state.user) {
+    elements.authStatus.textContent = `Signed in as ${state.user.displayName} (${state.user.email})`;
+    elements.authSubmitBtn.textContent = 'Refresh Session';
+    elements.logoutBtn.classList.remove('hidden');
+  } else {
+    elements.authStatus.textContent = 'Sign in to create private reminders.';
+    elements.authSubmitBtn.textContent = 'Continue';
+    elements.logoutBtn.classList.add('hidden');
+  }
+
+  const disabled = !state.user;
+  const reminderInputs = elements.reminderForm.querySelectorAll('input, select, button');
+  reminderInputs.forEach((el) => {
+    el.disabled = disabled;
+  });
 }
 
 function renderAnimeSelect() {
@@ -244,6 +306,11 @@ function refreshCountdowns() {
 
 function renderReminders() {
   elements.remindersList.innerHTML = '';
+
+  if (!state.user) {
+    elements.remindersList.innerHTML = '<li class="muted">Sign in to view your reminders.</li>';
+    return;
+  }
 
   if (!state.reminders.length) {
     elements.remindersList.innerHTML = '<li class="muted">No reminders yet.</li>';
@@ -316,6 +383,28 @@ function setEpisodeSort(sortValue) {
   renderEpisodes();
 }
 
+function setAuthMode(mode) {
+  const isRegister = mode === 'register';
+  elements.displayNameWrap.classList.toggle('hidden', !isRegister);
+}
+
+async function ensureAuthSession() {
+  if (!state.authToken) {
+    clearSession();
+    renderAuthState();
+    return;
+  }
+
+  try {
+    const result = await api('/api/auth/me');
+    state.user = result.user;
+  } catch (_error) {
+    clearSession();
+  }
+
+  renderAuthState();
+}
+
 async function loadAnime() {
   state.anime = await api('/api/anime');
   renderAnimeSelect();
@@ -328,6 +417,12 @@ async function loadEpisodes() {
 }
 
 async function loadReminders() {
+  if (!state.user) {
+    state.reminders = [];
+    renderReminders();
+    return;
+  }
+
   state.reminders = await api('/api/reminders');
   renderReminders();
 }
@@ -343,6 +438,46 @@ function registerEvents() {
     setEpisodeSort(event.target.value);
   });
 
+  elements.authMode.addEventListener('change', (event) => {
+    setAuthMode(event.target.value);
+  });
+
+  elements.authForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const mode = elements.authMode.value;
+    const email = elements.authEmail.value;
+    const password = elements.authPassword.value;
+    const displayName = elements.displayName.value;
+
+    try {
+      const response = await api(`/api/auth/${mode}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, displayName }),
+      });
+
+      persistToken(response.token);
+      state.user = response.user;
+      renderAuthState();
+      await loadReminders();
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+
+  elements.logoutBtn.addEventListener('click', async () => {
+    try {
+      await api('/api/auth/logout', { method: 'POST' });
+    } catch (_error) {
+      // Ignore logout errors and clear client session anyway.
+    }
+
+    clearSession();
+    renderAuthState();
+    renderReminders();
+  });
+
   elements.episodeFilters.addEventListener('click', (event) => {
     const target = event.target;
     if (!(target instanceof HTMLButtonElement)) return;
@@ -352,6 +487,11 @@ function registerEvents() {
 
   elements.reminderForm.addEventListener('submit', async (event) => {
     event.preventDefault();
+
+    if (!state.user) {
+      alert('Sign in first to save reminders.');
+      return;
+    }
 
     const payload = {
       animeId: document.getElementById('animeSelect').value || null,
@@ -399,6 +539,8 @@ function registerEvents() {
 
 async function bootstrap() {
   registerEvents();
+  setAuthMode(elements.authMode.value);
+  await ensureAuthSession();
   await Promise.all([loadAnime(), loadEpisodes(), loadReminders(), loadSyncStatus()]);
   setInterval(refreshCountdowns, 1000 * 30);
 }
