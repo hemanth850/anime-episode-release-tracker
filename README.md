@@ -17,6 +17,9 @@ Dashboard showing upcoming anime episode releases, live countdowns, reminders, a
   - register/login/logout
   - token-based sessions
   - private per-user reminders
+  - automatic browser timezone detection
+  - email verification (required before login)
+  - forgot password + reset password flow
 - `.ics` calendar export endpoint
 - Seeded local demo data (kept alongside synced data)
 
@@ -56,6 +59,10 @@ See `.env.example`.
 - `GET /api/health`
 - `POST /api/auth/register`
 - `POST /api/auth/login`
+- `POST /api/auth/resend-verification`
+- `POST /api/auth/verify-email`
+- `POST /api/auth/forgot-password`
+- `POST /api/auth/reset-password`
 - `GET /api/auth/me`
 - `POST /api/auth/logout`
 - `GET /api/anime`
@@ -73,6 +80,8 @@ See `.env.example`.
 - AniList sync writes anime/episodes with `source='anilist'` and upserts by external IDs.
 - Local seeded data remains available (`source='local'`).
 - Reminder ownership is scoped to signed-in users.
+- Episode release timestamps in UI default to the user/browser timezone automatically.
+- Verification/reset emails are sent through the existing email transport (or dry-run logs if SMTP is not configured).
 
 ## Suggested Phase 4
 - Timezone preferences and local-time reminder delivery

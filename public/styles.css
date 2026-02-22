@@ -1,4 +1,24 @@
 :root {
+  --bg: #0f1720;
+  --panel: #17222f;
+  --accent: #38a3c8;
+  --accent-2: #ff955f;
+  --text: #e7eff8;
+  --muted: #9eb0c1;
+  --danger: #d14949;
+  --bg-spot-1: #123248;
+  --bg-spot-2: #3a2f4a;
+  --surface-1: #1e2b3a;
+  --surface-2: #26384b;
+  --card-border: rgba(144, 186, 221, 0.22);
+  --highlight-surface-1: #2a1f26;
+  --highlight-surface-2: #3a252d;
+  --highlight-text: #f9f3ef;
+  --highlight-muted: #ffd6be;
+  --highlight-accent: #ffc38f;
+}
+
+[data-theme='light'] {
   --bg: #f4efe7;
   --panel: #fff8f0;
   --accent: #0a4d68;
@@ -6,6 +26,16 @@
   --text: #1d2630;
   --muted: #62707f;
   --danger: #8d1b1b;
+  --bg-spot-1: #ffd6a5;
+  --bg-spot-2: #9fd8cb;
+  --surface-1: #ffffff;
+  --surface-2: #f8fbfd;
+  --card-border: rgba(29, 38, 48, 0.12);
+  --highlight-surface-1: #fff6ef;
+  --highlight-surface-2: #ffe7d9;
+  --highlight-text: #2b1f1a;
+  --highlight-muted: #694234;
+  --highlight-accent: #c95b2a;
 }
 
 * {
@@ -18,8 +48,8 @@ body {
   font-family: 'Space Grotesk', sans-serif;
   color: var(--text);
   background:
-    radial-gradient(circle at 10% 20%, #ffd6a5 0%, transparent 30%),
-    radial-gradient(circle at 80% 10%, #9fd8cb 0%, transparent 28%),
+    radial-gradient(circle at 10% 20%, var(--bg-spot-1) 0%, transparent 30%),
+    radial-gradient(circle at 80% 10%, var(--bg-spot-2) 0%, transparent 28%),
     var(--bg);
   padding: 2rem 1rem 3rem;
 }
@@ -51,6 +81,11 @@ header p {
   color: var(--muted);
 }
 
+.theme-control {
+  margin-top: 0.8rem;
+  max-width: 180px;
+}
+
 main {
   display: grid;
   gap: 1rem;
@@ -58,8 +93,8 @@ main {
 }
 
 .panel {
-  background: color-mix(in srgb, var(--panel) 90%, white 10%);
-  border: 1px solid rgba(10, 77, 104, 0.15);
+  background: color-mix(in srgb, var(--panel) 92%, black 8%);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent 65%);
   border-radius: 16px;
   padding: 1rem;
   box-shadow: 0 8px 24px rgba(10, 77, 104, 0.08);
@@ -105,6 +140,17 @@ label {
   gap: 0.5rem;
 }
 
+.auth-tools {
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+#resetPasswordForm {
+  margin-top: 0.8rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid color-mix(in srgb, var(--muted) 22%, transparent 78%);
+}
+
 input,
 select,
 button {
@@ -113,8 +159,9 @@ button {
 
 input,
 select {
-  border: 1px solid rgba(29, 38, 48, 0.2);
-  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--muted) 30%, transparent 70%);
+  background: color-mix(in srgb, var(--surface-1) 92%, black 8%);
+  color: var(--text);
   border-radius: 10px;
   padding: 0.55rem 0.65rem;
 }
@@ -153,14 +200,14 @@ button:hover {
 }
 
 .filter-chip {
-  background: #e9eef2;
-  color: #1f3647;
+  background: color-mix(in srgb, var(--surface-2) 85%, black 15%);
+  color: var(--text);
   padding: 0.4rem 0.65rem;
   border: 1px solid transparent;
 }
 
 .filter-chip:hover {
-  background: #d5e1e8;
+  background: color-mix(in srgb, var(--surface-2) 72%, black 28%);
 }
 
 .filter-chip.active {
@@ -177,7 +224,7 @@ button:hover {
 .episode-day-group h3 {
   margin: 0 0 0.5rem;
   font-size: 1rem;
-  color: #18445e;
+  color: color-mix(in srgb, var(--accent) 82%, white 18%);
 }
 
 .episode-day-cards {
@@ -188,9 +235,9 @@ button:hover {
 }
 
 .episode-card {
-  border: 1px solid rgba(29, 38, 48, 0.12);
+  border: 1px solid var(--card-border);
   border-radius: 12px;
-  background: linear-gradient(165deg, #ffffff 0%, #f8fbfd 100%);
+  background: linear-gradient(165deg, var(--surface-1) 0%, var(--surface-2) 100%);
   padding: 0.75rem;
   animation: reveal 320ms ease;
   grid-column: span 4;
@@ -198,6 +245,15 @@ button:hover {
   position: relative;
   overflow: hidden;
   transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  grid-template-areas:
+    'poster head'
+    'poster title'
+    'poster release'
+    'poster countdown';
+  column-gap: 0.7rem;
+  align-items: start;
 }
 
 .episode-card::after {
@@ -227,15 +283,45 @@ button:hover {
   min-height: 220px;
 }
 
+.poster-wrap {
+  grid-area: poster;
+  width: 72px;
+  aspect-ratio: 2 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  background: linear-gradient(140deg, #e4edf2, #f8fbfd);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent 70%);
+  position: relative;
+}
+
+.poster-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.poster-wrap.empty::before {
+  content: 'NO POSTER';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  color: #5f7280;
+}
+
 .episode-card.popular-hero {
-  border-color: rgba(228, 83, 52, 0.5);
-  background: linear-gradient(160deg, #fff6ef 0%, #ffe7d9 42%, #fff9f4 100%);
-  box-shadow: 0 14px 28px rgba(228, 83, 52, 0.2);
+  border-color: color-mix(in srgb, var(--highlight-accent) 55%, transparent 45%);
+  background: linear-gradient(160deg, var(--highlight-surface-1) 0%, var(--highlight-surface-2) 58%, var(--highlight-surface-1) 100%);
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--highlight-accent) 28%, transparent 72%);
 }
 
 .episode-card.popular-hot {
-  border-color: rgba(242, 107, 56, 0.35);
-  background: linear-gradient(170deg, #fff8f1 0%, #fff2e5 100%);
+  border-color: color-mix(in srgb, var(--highlight-accent) 42%, transparent 58%);
+  background: linear-gradient(170deg, color-mix(in srgb, var(--highlight-surface-1) 86%, black 14%) 0%, color-mix(in srgb, var(--highlight-surface-2) 86%, black 14%) 100%);
 }
 
 @keyframes reveal {
@@ -260,6 +346,7 @@ button:hover {
 }
 
 .card-head {
+  grid-area: head;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -285,6 +372,7 @@ button:hover {
 }
 
 .episode-card h3 {
+  grid-column: 2;
   margin: 0.6rem 0 0.2rem;
   font-size: 1.05rem;
 }
@@ -292,12 +380,37 @@ button:hover {
 .episode-title,
 .release-at,
 .countdown {
+  grid-column: 2;
   margin: 0.2rem 0;
 }
 
 .countdown {
   color: var(--accent-2);
   font-weight: 700;
+}
+
+.episode-card.popular-hero h3,
+.episode-card.popular-hot h3,
+.episode-card.popular-hero .episode-title,
+.episode-card.popular-hot .episode-title,
+.episode-card.popular-hero .release-at,
+.episode-card.popular-hot .release-at,
+.episode-card.popular-hero .countdown,
+.episode-card.popular-hot .countdown {
+  color: var(--highlight-text);
+}
+
+.episode-card.popular-hero .chip,
+.episode-card.popular-hot .chip {
+  background: color-mix(in srgb, var(--highlight-accent) 28%, transparent 72%);
+  color: var(--highlight-muted);
+}
+
+.episode-card.popular-hero .pop-badge,
+.episode-card.popular-hot .pop-badge {
+  color: var(--highlight-text);
+  background: color-mix(in srgb, var(--highlight-accent) 26%, transparent 74%);
+  border-color: color-mix(in srgb, var(--highlight-accent) 45%, transparent 55%);
 }
 
 .reminders-list {
@@ -313,10 +426,10 @@ button:hover {
   justify-content: space-between;
   gap: 0.6rem;
   align-items: center;
-  border: 1px solid rgba(29, 38, 48, 0.12);
+  border: 1px solid var(--card-border);
   border-radius: 10px;
   padding: 0.5rem;
-  background: #fff;
+  background: linear-gradient(165deg, var(--surface-1) 0%, var(--surface-2) 100%);
 }
 
 .danger {
@@ -343,5 +456,10 @@ button:hover {
   .episode-card.tile-xl {
     grid-column: span 1;
     min-height: 0;
+    grid-template-columns: 64px 1fr;
+  }
+
+  .poster-wrap {
+    width: 64px;
   }
 }

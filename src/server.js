@@ -8,6 +8,7 @@ const { db, initDb } = require('./db');
 const { startScheduler, runReminderScan } = require('./jobs/scheduler');
 const { runAniListSyncSafe, getAniListSyncStatus } = require('./services/anilistSyncService');
 const { hashPassword, verifyPassword, createSessionToken } = require('./services/authService');
+const { sendEmailReminder } = require('./services/emailService');
 
 initDb();
 
@@ -25,7 +26,8 @@ const listAnimeStmt = db.prepare(`
 const listUpcomingEpisodesStmt = db.prepare(`
   SELECT e.id, e.anime_id AS animeId, a.title AS animeTitle,
          e.episode_number AS episodeNumber, e.title, e.release_at AS releaseAt,
-         e.source, a.source AS animeSource, a.popularity AS animePopularity
+         e.source, a.source AS animeSource, a.popularity AS animePopularity,
+         a.cover_image_url AS animeCoverImage
   FROM episodes e
   JOIN anime a ON a.id = e.anime_id
   WHERE e.release_at BETWEEN ? AND ?
@@ -34,22 +36,46 @@ const listUpcomingEpisodesStmt = db.prepare(`
 
 const createUserStmt = db.prepare(`
   INSERT INTO users (email, password_hash, display_name, timezone)
-  VALUES (?, ?, ?, 'UTC')
+  VALUES (?, ?, ?, ?)
 `);
 
 const findUserByEmailStmt = db.prepare(`
-  SELECT id, email, password_hash AS passwordHash, display_name AS displayName, timezone, created_at AS createdAt
+  SELECT id, email, password_hash AS passwordHash, display_name AS displayName,
+         timezone, email_verified AS emailVerified, created_at AS createdAt
   FROM users
   WHERE email = ?
+`);
+const findUserByIdStmt = db.prepare(`
+  SELECT id, email, password_hash AS passwordHash, display_name AS displayName,
+         timezone, email_verified AS emailVerified, created_at AS createdAt
+  FROM users
+  WHERE id = ?
+`);
+const updateUserTimezoneStmt = db.prepare(`
+  UPDATE users
+  SET timezone = ?
+  WHERE id = ?
+`);
+const updateUserEmailVerifiedStmt = db.prepare(`
+  UPDATE users
+  SET email_verified = 1
+  WHERE id = ?
+`);
+const updateUserPasswordStmt = db.prepare(`
+  UPDATE users
+  SET password_hash = ?
+  WHERE id = ?
 `);
 
 const createSessionStmt = db.prepare(`
   INSERT INTO user_sessions (token, user_id, expires_at)
   VALUES (?, ?, ?)
 `);
+const deleteSessionsByUserStmt = db.prepare('DELETE FROM user_sessions WHERE user_id = ?');
 
 const findSessionUserStmt = db.prepare(`
   SELECT u.id, u.email, u.display_name AS displayName, u.timezone,
+         u.email_verified AS emailVerified,
          s.token, s.expires_at AS expiresAt
   FROM user_sessions s
   JOIN users u ON u.id = s.user_id
@@ -58,6 +84,44 @@ const findSessionUserStmt = db.prepare(`
 
 const deleteSessionStmt = db.prepare('DELETE FROM user_sessions WHERE token = ?');
 const deleteExpiredSessionsStmt = db.prepare('DELETE FROM user_sessions WHERE expires_at <= ?');
+const deleteExpiredEmailVerificationTokensStmt = db.prepare(`
+  DELETE FROM email_verification_tokens
+  WHERE expires_at <= ? OR used_at IS NOT NULL
+`);
+const deleteExpiredPasswordResetTokensStmt = db.prepare(`
+  DELETE FROM password_reset_tokens
+  WHERE expires_at <= ? OR used_at IS NOT NULL
+`);
+const insertEmailVerificationTokenStmt = db.prepare(`
+  INSERT INTO email_verification_tokens (token, user_id, expires_at)
+  VALUES (?, ?, ?)
+`);
+const findEmailVerificationTokenStmt = db.prepare(`
+  SELECT token, user_id AS userId, expires_at AS expiresAt, used_at AS usedAt
+  FROM email_verification_tokens
+  WHERE token = ?
+`);
+const consumeEmailVerificationTokenStmt = db.prepare(`
+  UPDATE email_verification_tokens
+  SET used_at = ?
+  WHERE token = ?
+`);
+const deleteEmailVerificationByUserStmt = db.prepare('DELETE FROM email_verification_tokens WHERE user_id = ?');
+const insertPasswordResetTokenStmt = db.prepare(`
+  INSERT INTO password_reset_tokens (token, user_id, expires_at)
+  VALUES (?, ?, ?)
+`);
+const findPasswordResetTokenStmt = db.prepare(`
+  SELECT token, user_id AS userId, expires_at AS expiresAt, used_at AS usedAt
+  FROM password_reset_tokens
+  WHERE token = ?
+`);
+const consumePasswordResetTokenStmt = db.prepare(`
+  UPDATE password_reset_tokens
+  SET used_at = ?
+  WHERE token = ?
+`);
+const deletePasswordResetByUserStmt = db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?');
 
 const insertReminderStmt = db.prepare(`
   INSERT INTO reminders (user_id, anime_id, email, discord_webhook_url, minutes_before)
@@ -80,6 +144,61 @@ function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
 
+function createExpiry(hours) {
+  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+}
+
+function isValidTimeZone(timezone) {
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+async function issueEmailVerification(user) {
+  deleteExpiredEmailVerificationTokensStmt.run(new Date().toISOString());
+  deleteEmailVerificationByUserStmt.run(user.id);
+
+  const token = createSessionToken();
+  const expiresAt = createExpiry(24);
+  insertEmailVerificationTokenStmt.run(token, user.id, expiresAt);
+
+  const verifyUrl = `${config.appBaseUrl}/?verifyToken=${encodeURIComponent(token)}`;
+  const message = [
+    `Hi ${user.displayName},`,
+    '',
+    'Please verify your email to activate your account:',
+    verifyUrl,
+    '',
+    'This link expires in 24 hours.',
+  ].join('\n');
+
+  await sendEmailReminder(user.email, 'Verify your Anime Tracker email', message);
+}
+
+async function issuePasswordReset(user) {
+  deleteExpiredPasswordResetTokensStmt.run(new Date().toISOString());
+  deletePasswordResetByUserStmt.run(user.id);
+
+  const token = createSessionToken();
+  const expiresAt = createExpiry(1);
+  insertPasswordResetTokenStmt.run(token, user.id, expiresAt);
+
+  const resetUrl = `${config.appBaseUrl}/?resetToken=${encodeURIComponent(token)}`;
+  const message = [
+    `Hi ${user.displayName},`,
+    '',
+    'You requested a password reset:',
+    resetUrl,
+    '',
+    'This link expires in 1 hour.',
+  ].join('\n');
+
+  await sendEmailReminder(user.email, 'Anime Tracker password reset', message);
+}
+
 function createSessionForUser(userId) {
   const token = createSessionToken();
   const expiresAt = new Date(Date.now() + config.auth.sessionDays * 24 * 60 * 60 * 1000).toISOString();
@@ -93,6 +212,7 @@ function sanitizeUser(user) {
     email: user.email,
     displayName: user.displayName,
     timezone: user.timezone,
+    emailVerified: Boolean(user.emailVerified),
   };
 }
 
@@ -141,6 +261,7 @@ app.post('/api/auth/register', (req, res) => {
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
   const displayName = String(req.body.displayName || '').trim();
+  const timezone = String(req.body.timezone || 'UTC').trim() || 'UTC';
 
   if (!email || !email.includes('@')) {
     return res.status(400).json({ error: 'Enter a valid email address.' });
@@ -154,30 +275,50 @@ app.post('/api/auth/register', (req, res) => {
     return res.status(400).json({ error: 'Display name must be at least 2 characters.' });
   }
 
+  if (!isValidTimeZone(timezone)) {
+    return res.status(400).json({ error: 'Invalid IANA timezone.' });
+  }
+
   const existing = findUserByEmailStmt.get(email);
   if (existing) {
     return res.status(409).json({ error: 'Email already exists.' });
   }
 
   const passwordHash = hashPassword(password);
-  const result = createUserStmt.run(email, passwordHash, displayName);
-  const session = createSessionForUser(result.lastInsertRowid);
-  const user = findSessionUserStmt.get(session.token);
+  const result = createUserStmt.run(email, passwordHash, displayName, timezone);
+  const user = findUserByIdStmt.get(result.lastInsertRowid);
+
+  issueEmailVerification(user).catch((error) => {
+    console.error('Failed to send verification email:', error.message);
+  });
 
   return res.status(201).json({
-    token: session.token,
-    expiresAt: session.expiresAt,
-    user: sanitizeUser(user),
+    ok: true,
+    requiresEmailVerification: true,
+    message: 'Account created. Please verify your email before logging in.',
   });
 });
 
 app.post('/api/auth/login', (req, res) => {
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
+  const timezone = String(req.body.timezone || '').trim();
 
   const user = findUserByEmailStmt.get(email);
   if (!user || !verifyPassword(password, user.passwordHash)) {
     return res.status(401).json({ error: 'Invalid email or password.' });
+  }
+
+  if (!user.emailVerified) {
+    return res.status(403).json({
+      error: 'Please verify your email before logging in.',
+      requiresEmailVerification: true,
+    });
+  }
+
+  if (timezone && isValidTimeZone(timezone) && timezone !== user.timezone) {
+    updateUserTimezoneStmt.run(timezone, user.id);
+    user.timezone = timezone;
   }
 
   const session = createSessionForUser(user.id);
@@ -188,8 +329,97 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
+app.post('/api/auth/resend-verification', async (req, res) => {
+  const email = normalizeEmail(req.body.email);
+  const user = findUserByEmailStmt.get(email);
+
+  if (!user || user.emailVerified) {
+    return res.json({ ok: true });
+  }
+
+  try {
+    await issueEmailVerification(user);
+  } catch (error) {
+    console.error('Failed to resend verification email:', error.message);
+  }
+
+  return res.json({ ok: true });
+});
+
+app.post('/api/auth/verify-email', (req, res) => {
+  const token = String(req.body.token || '').trim();
+  if (!token) return res.status(400).json({ error: 'Token is required.' });
+
+  const row = findEmailVerificationTokenStmt.get(token);
+  if (!row || row.usedAt || new Date(row.expiresAt).getTime() <= Date.now()) {
+    return res.status(400).json({ error: 'Invalid or expired verification token.' });
+  }
+
+  const now = new Date().toISOString();
+  consumeEmailVerificationTokenStmt.run(now, token);
+  updateUserEmailVerifiedStmt.run(row.userId);
+
+  return res.json({ ok: true, message: 'Email verified. You can now log in.' });
+});
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const email = normalizeEmail(req.body.email);
+  const user = findUserByEmailStmt.get(email);
+
+  if (user) {
+    try {
+      await issuePasswordReset(user);
+    } catch (error) {
+      console.error('Failed to send password reset email:', error.message);
+    }
+  }
+
+  return res.json({ ok: true, message: 'If the account exists, a reset email was sent.' });
+});
+
+app.post('/api/auth/reset-password', (req, res) => {
+  const token = String(req.body.token || '').trim();
+  const newPassword = String(req.body.newPassword || '');
+
+  if (!token) {
+    return res.status(400).json({ error: 'Token is required.' });
+  }
+
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+
+  const row = findPasswordResetTokenStmt.get(token);
+  if (!row || row.usedAt || new Date(row.expiresAt).getTime() <= Date.now()) {
+    return res.status(400).json({ error: 'Invalid or expired reset token.' });
+  }
+
+  const passwordHash = hashPassword(newPassword);
+  const now = new Date().toISOString();
+  updateUserPasswordStmt.run(passwordHash, row.userId);
+  consumePasswordResetTokenStmt.run(now, token);
+  deleteSessionsByUserStmt.run(row.userId);
+
+  return res.json({ ok: true, message: 'Password reset successful. Please log in again.' });
+});
+
 app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json({ user: req.user });
+});
+
+app.patch('/api/auth/me', requireAuth, (req, res) => {
+  const timezone = String(req.body.timezone || '').trim();
+  if (!timezone) {
+    return res.status(400).json({ error: 'Timezone is required.' });
+  }
+
+  if (!isValidTimeZone(timezone)) {
+    return res.status(400).json({ error: 'Invalid IANA timezone.' });
+  }
+
+  updateUserTimezoneStmt.run(timezone, req.user.id);
+  const refreshed = findSessionUserStmt.get(req.user.token);
+  return res.json({ user: sanitizeUser(refreshed) });
 });
 
 app.post('/api/auth/logout', requireAuth, (req, res) => {
