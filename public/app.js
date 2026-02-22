@@ -1,5 +1,12 @@
 ﻿const AUTH_TOKEN_KEY = 'animeTrackerAuthToken';
 const THEME_KEY = 'animeTrackerTheme';
+const BROWSER_TIMEZONE = (() => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch (_error) {
+    return 'UTC';
+  }
+})();
 
 const state = {
   anime: [],
@@ -32,6 +39,11 @@ const elements = {
   authStatus: document.getElementById('authStatus'),
   authSubmitBtn: document.getElementById('authSubmitBtn'),
   logoutBtn: document.getElementById('logoutBtn'),
+  resendVerificationBtn: document.getElementById('resendVerificationBtn'),
+  forgotPasswordBtn: document.getElementById('forgotPasswordBtn'),
+  resetPasswordForm: document.getElementById('resetPasswordForm'),
+  resetTokenInput: document.getElementById('resetTokenInput'),
+  newPasswordInput: document.getElementById('newPasswordInput'),
   themeSelect: document.getElementById('themeSelect'),
 };
 
@@ -45,6 +57,18 @@ function timeUntil(dateIso) {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
 
   return `${days}d ${hours}h ${minutes}m`;
+}
+
+function formatReleaseTime(dateIso) {
+  const date = new Date(dateIso);
+  const options = {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  };
+
+  options.timeZone = state.user?.timezone || BROWSER_TIMEZONE;
+
+  return new Intl.DateTimeFormat(undefined, options).format(date);
 }
 
 function toDateKey(date) {
@@ -154,7 +178,7 @@ function renderEpisodeCard(episode, index) {
   fragment.querySelector('.pop-badge').textContent = '';
   fragment.querySelector('h3').textContent = `${episode.animeTitle} · Ep ${episode.episodeNumber}`;
   fragment.querySelector('.episode-title').textContent = `${episode.title} · Popularity ${popularity.toLocaleString()}`;
-  fragment.querySelector('.release-at').textContent = `Release: ${new Date(episode.releaseAt).toLocaleString()}`;
+  fragment.querySelector('.release-at').textContent = `Release: ${formatReleaseTime(episode.releaseAt)}`;
   fragment.querySelector('.countdown').textContent = `Countdown: ${timeUntil(episode.releaseAt)}`;
 
   return fragment;
@@ -248,11 +272,13 @@ function clearSession() {
 
 function renderAuthState() {
   if (state.user) {
-    elements.authStatus.textContent = `Signed in as ${state.user.displayName} (${state.user.email})`;
+    const tz = state.user.timezone || BROWSER_TIMEZONE;
+    const verified = state.user.emailVerified ? 'Verified' : 'Unverified';
+    elements.authStatus.textContent = `Signed in as ${state.user.displayName} (${state.user.email}) · ${tz} · ${verified}`;
     elements.authSubmitBtn.textContent = 'Refresh Session';
     elements.logoutBtn.classList.remove('hidden');
   } else {
-    elements.authStatus.textContent = 'Sign in to create private reminders.';
+    elements.authStatus.textContent = `Sign in to create private reminders. Current timezone: ${BROWSER_TIMEZONE}`;
     elements.authSubmitBtn.textContent = 'Continue';
     elements.logoutBtn.classList.add('hidden');
   }
@@ -425,6 +451,50 @@ async function ensureAuthSession() {
   renderAuthState();
 }
 
+async function maybeAutoSyncTimezone() {
+  if (!state.user) return;
+  if (!BROWSER_TIMEZONE) return;
+  if (state.user.timezone && state.user.timezone !== 'UTC') return;
+
+  try {
+    const result = await api('/api/auth/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timezone: BROWSER_TIMEZONE }),
+    });
+    state.user = result.user;
+    renderAuthState();
+  } catch (_error) {
+    // Ignore sync failures and keep fallback display behavior.
+  }
+}
+
+async function handleAuthUrlActions() {
+  const url = new URL(window.location.href);
+  const verifyToken = url.searchParams.get('verifyToken');
+  const resetToken = url.searchParams.get('resetToken');
+
+  if (resetToken) {
+    elements.resetTokenInput.value = resetToken;
+  }
+
+  if (verifyToken) {
+    try {
+      await api('/api/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: verifyToken }),
+      });
+      alert('Email verified. You can now log in.');
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      url.searchParams.delete('verifyToken');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }
+}
+
 async function loadAnime() {
   state.anime = await api('/api/anime');
   renderAnimeSelect();
@@ -477,13 +547,85 @@ function registerEvents() {
       const response = await api(`/api/auth/${mode}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, displayName }),
+        body: JSON.stringify({ email, password, displayName, timezone: BROWSER_TIMEZONE }),
       });
+
+      if (mode === 'register') {
+        alert(response.message || 'Registered. Please verify your email.');
+        elements.authMode.value = 'login';
+        setAuthMode('login');
+        elements.authPassword.value = '';
+        return;
+      }
 
       persistToken(response.token);
       state.user = response.user;
       renderAuthState();
+      renderEpisodes();
       await loadReminders();
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+
+  elements.resendVerificationBtn.addEventListener('click', async () => {
+    const email = elements.authEmail.value;
+    if (!email) {
+      alert('Enter your email first.');
+      return;
+    }
+
+    try {
+      await api('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      alert('If the account exists, a verification email was sent.');
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+
+  elements.forgotPasswordBtn.addEventListener('click', async () => {
+    const email = elements.authEmail.value;
+    if (!email) {
+      alert('Enter your email first.');
+      return;
+    }
+
+    try {
+      await api('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      alert('If the account exists, a reset email was sent.');
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+
+  elements.resetPasswordForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const token = elements.resetTokenInput.value.trim();
+    const newPassword = elements.newPasswordInput.value;
+
+    if (!token || !newPassword) {
+      alert('Provide reset token and new password.');
+      return;
+    }
+
+    try {
+      await api('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, newPassword }),
+      });
+      alert('Password reset successful. Please log in.');
+      elements.newPasswordInput.value = '';
+      elements.authMode.value = 'login';
+      setAuthMode('login');
     } catch (error) {
       alert(error.message);
     }
@@ -564,7 +706,9 @@ async function bootstrap() {
   registerEvents();
   applyTheme(localStorage.getItem(THEME_KEY) || 'dark');
   setAuthMode(elements.authMode.value);
+  await handleAuthUrlActions();
   await ensureAuthSession();
+  await maybeAutoSyncTimezone();
   await Promise.all([loadAnime(), loadEpisodes(), loadReminders(), loadSyncStatus()]);
   setInterval(refreshCountdowns, 1000 * 30);
 }
@@ -573,4 +717,5 @@ bootstrap().catch((error) => {
   console.error(error);
   alert('Failed to load dashboard. Check server logs.');
 });
+
 

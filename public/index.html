@@ -87,6 +87,21 @@
                 <button type="button" class="secondary" id="logoutBtn">Logout</button>
               </div>
             </form>
+            <div class="inline-actions auth-tools">
+              <button type="button" class="secondary" id="resendVerificationBtn">Resend Verification</button>
+              <button type="button" class="secondary" id="forgotPasswordBtn">Send Reset Link</button>
+            </div>
+            <form id="resetPasswordForm">
+              <label>
+                Reset Token
+                <input id="resetTokenInput" type="text" placeholder="Paste reset token or use link param" />
+              </label>
+              <label>
+                New Password
+                <input id="newPasswordInput" type="password" placeholder="At least 8 characters" />
+              </label>
+              <button type="submit" class="secondary" id="resetPasswordBtn">Reset Password</button>
+            </form>
           </div>
 
           <h2>Create Reminder</h2>

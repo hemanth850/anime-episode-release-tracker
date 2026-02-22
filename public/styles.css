@@ -140,6 +140,17 @@ label {
   gap: 0.5rem;
 }
 
+.auth-tools {
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+#resetPasswordForm {
+  margin-top: 0.8rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid color-mix(in srgb, var(--muted) 22%, transparent 78%);
+}
+
 input,
 select,
 button {

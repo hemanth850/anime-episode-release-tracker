@@ -66,6 +66,7 @@ function initDb() {
       password_hash TEXT NOT NULL,
       display_name TEXT NOT NULL,
       timezone TEXT NOT NULL DEFAULT 'UTC',
+      email_verified INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -73,6 +74,24 @@ function initDb() {
       token TEXT PRIMARY KEY,
       user_id INTEGER NOT NULL,
       expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS email_verification_tokens (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -104,6 +123,7 @@ function initDb() {
   ensureColumn('episodes', 'source', "TEXT NOT NULL DEFAULT 'local'");
   ensureColumn('episodes', 'external_id', 'TEXT');
   ensureColumn('reminders', 'user_id', 'INTEGER');
+  ensureColumn('users', 'email_verified', 'INTEGER NOT NULL DEFAULT 0');
 
   db.exec(`
     DROP INDEX IF EXISTS idx_anime_source_external;
@@ -113,6 +133,10 @@ function initDb() {
     CREATE INDEX IF NOT EXISTS idx_reminders_user ON reminders(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_email_verification_user ON email_verification_tokens(user_id);
+    CREATE INDEX IF NOT EXISTS idx_email_verification_expires ON email_verification_tokens(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id);
+    CREATE INDEX IF NOT EXISTS idx_password_reset_expires ON password_reset_tokens(expires_at);
   `);
 
   const animeCount = db.prepare('SELECT COUNT(*) AS count FROM anime').get().count;
