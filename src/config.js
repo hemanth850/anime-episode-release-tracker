@@ -7,8 +7,15 @@ function number(value, fallback) {
 
 module.exports = {
   port: number(process.env.PORT, 4000),
+  nodeEnv: process.env.NODE_ENV || 'development',
   dbPath: process.env.DB_PATH || './data/tracker.db',
   appBaseUrl: process.env.APP_BASE_URL || 'http://localhost:4000',
+  corsOrigin: process.env.CORS_ORIGIN || '*',
+  trustProxy: number(process.env.TRUST_PROXY, 0),
+  rateLimit: {
+    windowMs: Math.max(60 * 1000, number(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000)),
+    max: Math.max(20, number(process.env.RATE_LIMIT_MAX, 200)),
+  },
   smtp: {
     host: process.env.SMTP_HOST || '',
     port: number(process.env.SMTP_PORT, 587),

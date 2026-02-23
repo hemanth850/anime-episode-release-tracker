@@ -1,6 +1,9 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
+const helmet = require('helmet');
+const compression = require('compression');
+const rateLimit = require('express-rate-limit');
 const ical = require('ical-generator').default;
 
 const config = require('./config');
@@ -13,8 +16,33 @@ const { sendEmailReminder } = require('./services/emailService');
 initDb();
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.set('trust proxy', config.trustProxy);
+
+const corsOptions = config.corsOrigin === '*'
+  ? { origin: true }
+  : {
+      origin: config.corsOrigin.split(',').map((origin) => origin.trim()).filter(Boolean),
+    };
+
+const globalRateLimit = rateLimit({
+  windowMs: config.rateLimit.windowMs,
+  max: config.rateLimit.max,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Math.max(10, Math.floor(config.rateLimit.max / 4)),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(compression());
+app.use(cors(corsOptions));
+app.use(globalRateLimit);
+app.use(express.json({ limit: '200kb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const listAnimeStmt = db.prepare(`
@@ -257,7 +285,7 @@ app.get('/api/health', (_, res) => {
   res.json({ ok: true, now: new Date().toISOString() });
 });
 
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', authRateLimit, (req, res) => {
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
   const displayName = String(req.body.displayName || '').trim();
@@ -299,7 +327,7 @@ app.post('/api/auth/register', (req, res) => {
   });
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', authRateLimit, (req, res) => {
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
   const timezone = String(req.body.timezone || '').trim();
@@ -329,7 +357,7 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
-app.post('/api/auth/resend-verification', async (req, res) => {
+app.post('/api/auth/resend-verification', authRateLimit, async (req, res) => {
   const email = normalizeEmail(req.body.email);
   const user = findUserByEmailStmt.get(email);
 
@@ -346,7 +374,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
   return res.json({ ok: true });
 });
 
-app.post('/api/auth/verify-email', (req, res) => {
+app.post('/api/auth/verify-email', authRateLimit, (req, res) => {
   const token = String(req.body.token || '').trim();
   if (!token) return res.status(400).json({ error: 'Token is required.' });
 
@@ -362,7 +390,7 @@ app.post('/api/auth/verify-email', (req, res) => {
   return res.json({ ok: true, message: 'Email verified. You can now log in.' });
 });
 
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', authRateLimit, async (req, res) => {
   const email = normalizeEmail(req.body.email);
   const user = findUserByEmailStmt.get(email);
 
@@ -377,7 +405,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   return res.json({ ok: true, message: 'If the account exists, a reset email was sent.' });
 });
 
-app.post('/api/auth/reset-password', (req, res) => {
+app.post('/api/auth/reset-password', authRateLimit, (req, res) => {
   const token = String(req.body.token || '').trim();
   const newPassword = String(req.body.newPassword || '');
 
@@ -531,6 +559,11 @@ app.use((req, res) => {
   }
 
   return res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
+
+app.use((error, _req, res, _next) => {
+  console.error(error);
+  return res.status(500).json({ error: 'Internal server error' });
 });
 
 app.listen(config.port, () => {

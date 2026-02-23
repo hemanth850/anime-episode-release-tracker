@@ -2,7 +2,7 @@
 
 Dashboard showing upcoming anime episode releases, live countdowns, reminders, account-based subscriptions, and calendar export.
 
-## Phase 1 + Phase 2 + Phase 3 (Implemented)
+## Phase 1 + Phase 2 + Phase 3 + Phase 4 (Implemented)
 - Full-stack app with Express + SQLite
 - Upcoming episode dashboard with live countdowns
 - Popularity-driven card emphasis and sorting
@@ -20,6 +20,11 @@ Dashboard showing upcoming anime episode releases, live countdowns, reminders, a
   - automatic browser timezone detection
   - email verification (required before login)
   - forgot password + reset password flow
+- Production/deployment readiness:
+  - Dockerfile + docker-compose
+  - security middleware (helmet, compression)
+  - API rate limiting
+  - configurable CORS/proxy/env settings
 - `.ics` calendar export endpoint
 - Seeded local demo data (kept alongside synced data)
 
@@ -54,6 +59,11 @@ See `.env.example`.
 - `ANILIST_PAGE_LIMIT`: Number of AniList pages to fetch per sync (default `3`)
 - `ANILIST_PER_PAGE`: Items per AniList page (default `50`, max `50`)
 - `AUTH_SESSION_DAYS`: Session duration in days (default `30`)
+- `NODE_ENV`: runtime mode (`development`/`production`)
+- `CORS_ORIGIN`: `*` or comma-separated allowed origins
+- `TRUST_PROXY`: proxy hops count (set `1` behind reverse proxy)
+- `RATE_LIMIT_WINDOW_MS`: rate-limit window in ms
+- `RATE_LIMIT_MAX`: max requests per window per IP
 
 ## API Endpoints
 - `GET /api/health`
@@ -83,8 +93,32 @@ See `.env.example`.
 - Episode release timestamps in UI default to the user/browser timezone automatically.
 - Verification/reset emails are sent through the existing email transport (or dry-run logs if SMTP is not configured).
 
+## Deploy With Docker
+1. Build and run:
+   ```bash
+   docker compose up -d --build
+   ```
+2. Open:
+   - `http://localhost:4000`
+3. Check logs:
+   ```bash
+   docker compose logs -f web
+   ```
+4. Stop:
+   ```bash
+   docker compose down
+   ```
+
+## Deploy To Cloud (Quick Checklist)
+1. Set production env vars:
+   - `NODE_ENV=production`
+   - `APP_BASE_URL=https://your-domain`
+   - `CORS_ORIGIN=https://your-domain`
+   - SMTP vars for real emails
+2. Put app behind HTTPS reverse proxy (Nginx/Cloud load balancer).
+3. Set `TRUST_PROXY=1` when behind proxy.
+4. Persist `data/` storage (volume/disk mount).
+
 ## Suggested Phase 4
-- Timezone preferences and local-time reminder delivery
-- Docker + deployment configuration
 - Automated tests (API + sync + auth)
 - OAuth sign-in (Google/GitHub)
