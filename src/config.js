@@ -5,6 +5,11 @@ function number(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function bool(value, fallback) {
+  if (value === undefined) return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
+}
+
 module.exports = {
   port: number(process.env.PORT, 4000),
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -40,5 +45,8 @@ module.exports = {
       clientId: process.env.OAUTH_GITHUB_CLIENT_ID || '',
       clientSecret: process.env.OAUTH_GITHUB_CLIENT_SECRET || '',
     },
+  },
+  jobs: {
+    disableStartup: bool(process.env.DISABLE_STARTUP_JOBS, false),
   },
 };
