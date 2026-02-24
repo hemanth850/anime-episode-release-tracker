@@ -17,6 +17,10 @@ const state = {
   episodeSort: 'release',
   authToken: localStorage.getItem(AUTH_TOKEN_KEY) || '',
   user: null,
+  oauthProviders: {
+    google: false,
+    github: false,
+  },
 };
 
 const elements = {
@@ -44,6 +48,8 @@ const elements = {
   resetPasswordForm: document.getElementById('resetPasswordForm'),
   resetTokenInput: document.getElementById('resetTokenInput'),
   newPasswordInput: document.getElementById('newPasswordInput'),
+  oauthGoogleBtn: document.getElementById('oauthGoogleBtn'),
+  oauthGithubBtn: document.getElementById('oauthGithubBtn'),
   themeSelect: document.getElementById('themeSelect'),
 };
 
@@ -290,6 +296,11 @@ function renderAuthState() {
   });
 }
 
+function renderOAuthButtons() {
+  elements.oauthGoogleBtn.classList.toggle('hidden', !state.oauthProviders.google);
+  elements.oauthGithubBtn.classList.toggle('hidden', !state.oauthProviders.github);
+}
+
 function renderAnimeSelect() {
   elements.animeSelect.innerHTML = '';
 
@@ -473,9 +484,23 @@ async function handleAuthUrlActions() {
   const url = new URL(window.location.href);
   const verifyToken = url.searchParams.get('verifyToken');
   const resetToken = url.searchParams.get('resetToken');
+  const oauthToken = url.searchParams.get('oauthToken');
+  const oauthError = url.searchParams.get('oauthError');
 
   if (resetToken) {
     elements.resetTokenInput.value = resetToken;
+  }
+
+  if (oauthToken) {
+    persistToken(oauthToken);
+    url.searchParams.delete('oauthToken');
+    window.history.replaceState({}, '', url.toString());
+  }
+
+  if (oauthError) {
+    alert(oauthError);
+    url.searchParams.delete('oauthError');
+    window.history.replaceState({}, '', url.toString());
   }
 
   if (verifyToken) {
@@ -520,6 +545,15 @@ async function loadReminders() {
 async function loadSyncStatus() {
   state.syncStatus = await api('/api/sync/status');
   renderSyncStatus();
+}
+
+async function loadOAuthProviders() {
+  try {
+    state.oauthProviders = await api('/api/auth/oauth/providers');
+  } catch (_error) {
+    state.oauthProviders = { google: false, github: false };
+  }
+  renderOAuthButtons();
 }
 
 function registerEvents() {
@@ -604,6 +638,16 @@ function registerEvents() {
     } catch (error) {
       alert(error.message);
     }
+  });
+
+  elements.oauthGoogleBtn.addEventListener('click', () => {
+    const tz = encodeURIComponent(BROWSER_TIMEZONE);
+    window.location.href = `/api/auth/oauth/google/start?timezone=${tz}`;
+  });
+
+  elements.oauthGithubBtn.addEventListener('click', () => {
+    const tz = encodeURIComponent(BROWSER_TIMEZONE);
+    window.location.href = `/api/auth/oauth/github/start?timezone=${tz}`;
   });
 
   elements.resetPasswordForm.addEventListener('submit', async (event) => {
@@ -709,7 +753,7 @@ async function bootstrap() {
   await handleAuthUrlActions();
   await ensureAuthSession();
   await maybeAutoSyncTimezone();
-  await Promise.all([loadAnime(), loadEpisodes(), loadReminders(), loadSyncStatus()]);
+  await Promise.all([loadAnime(), loadEpisodes(), loadReminders(), loadSyncStatus(), loadOAuthProviders()]);
   setInterval(refreshCountdowns, 1000 * 30);
 }
 

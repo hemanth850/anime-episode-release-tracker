@@ -69,15 +69,27 @@ const createUserStmt = db.prepare(`
 
 const findUserByEmailStmt = db.prepare(`
   SELECT id, email, password_hash AS passwordHash, display_name AS displayName,
-         timezone, email_verified AS emailVerified, created_at AS createdAt
+         timezone, email_verified AS emailVerified,
+         oauth_provider AS oauthProvider, oauth_subject AS oauthSubject,
+         created_at AS createdAt
   FROM users
   WHERE email = ?
 `);
 const findUserByIdStmt = db.prepare(`
   SELECT id, email, password_hash AS passwordHash, display_name AS displayName,
-         timezone, email_verified AS emailVerified, created_at AS createdAt
+         timezone, email_verified AS emailVerified,
+         oauth_provider AS oauthProvider, oauth_subject AS oauthSubject,
+         created_at AS createdAt
   FROM users
   WHERE id = ?
+`);
+const findUserByOAuthStmt = db.prepare(`
+  SELECT id, email, password_hash AS passwordHash, display_name AS displayName,
+         timezone, email_verified AS emailVerified,
+         oauth_provider AS oauthProvider, oauth_subject AS oauthSubject,
+         created_at AS createdAt
+  FROM users
+  WHERE oauth_provider = ? AND oauth_subject = ?
 `);
 const updateUserTimezoneStmt = db.prepare(`
   UPDATE users
@@ -92,6 +104,11 @@ const updateUserEmailVerifiedStmt = db.prepare(`
 const updateUserPasswordStmt = db.prepare(`
   UPDATE users
   SET password_hash = ?
+  WHERE id = ?
+`);
+const updateUserOAuthIdentityStmt = db.prepare(`
+  UPDATE users
+  SET oauth_provider = ?, oauth_subject = ?, email_verified = CASE WHEN email_verified = 1 THEN 1 ELSE ? END
   WHERE id = ?
 `);
 
@@ -150,6 +167,17 @@ const consumePasswordResetTokenStmt = db.prepare(`
   WHERE token = ?
 `);
 const deletePasswordResetByUserStmt = db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?');
+const insertOAuthStateStmt = db.prepare(`
+  INSERT INTO oauth_state_tokens (state, provider, expires_at)
+  VALUES (?, ?, ?)
+`);
+const findOAuthStateStmt = db.prepare(`
+  SELECT state, provider, expires_at AS expiresAt
+  FROM oauth_state_tokens
+  WHERE state = ?
+`);
+const deleteOAuthStateStmt = db.prepare('DELETE FROM oauth_state_tokens WHERE state = ?');
+const deleteExpiredOAuthStateStmt = db.prepare('DELETE FROM oauth_state_tokens WHERE expires_at <= ?');
 
 const insertReminderStmt = db.prepare(`
   INSERT INTO reminders (user_id, anime_id, email, discord_webhook_url, minutes_before)
@@ -174,6 +202,167 @@ function normalizeEmail(email) {
 
 function createExpiry(hours) {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+}
+
+function buildCallbackUrl(provider) {
+  return new URL(`/api/auth/oauth/${provider}/callback`, config.appBaseUrl).toString();
+}
+
+function enabledOAuthProviders() {
+  return {
+    google: Boolean(config.oauth.google.clientId && config.oauth.google.clientSecret),
+    github: Boolean(config.oauth.github.clientId && config.oauth.github.clientSecret),
+  };
+}
+
+function consumeOAuthState(state, provider) {
+  deleteExpiredOAuthStateStmt.run(new Date().toISOString());
+  const row = findOAuthStateStmt.get(state);
+  if (!row) return false;
+  deleteOAuthStateStmt.run(state);
+  return row.provider === provider && new Date(row.expiresAt).getTime() > Date.now();
+}
+
+function issueOAuthState(provider) {
+  deleteExpiredOAuthStateStmt.run(new Date().toISOString());
+  const state = createSessionToken();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  insertOAuthStateStmt.run(state, provider, expiresAt);
+  return state;
+}
+
+function decodeJwtPayload(jwt) {
+  const parts = String(jwt || '').split('.');
+  if (parts.length < 2) throw new Error('Invalid JWT token');
+  const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4 || 4)) % 4);
+  const json = Buffer.from(padded, 'base64').toString('utf8');
+  return JSON.parse(json);
+}
+
+function defaultDisplayName(email, preferredName) {
+  if (preferredName && String(preferredName).trim().length >= 2) return String(preferredName).trim();
+  const localPart = String(email || '').split('@')[0] || 'Anime User';
+  return localPart.slice(0, 40);
+}
+
+async function fetchOAuthIdentity(provider, code) {
+  const callbackUrl = buildCallbackUrl(provider);
+
+  if (provider === 'google') {
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: config.oauth.google.clientId,
+        client_secret: config.oauth.google.clientSecret,
+        redirect_uri: callbackUrl,
+        grant_type: 'authorization_code',
+      }),
+    });
+
+    const tokenJson = await tokenResponse.json();
+    if (!tokenResponse.ok || !tokenJson.id_token) {
+      throw new Error('Google OAuth token exchange failed');
+    }
+
+    const payload = decodeJwtPayload(tokenJson.id_token);
+    if (!payload.email || !payload.sub) throw new Error('Google OAuth payload missing identity');
+
+    return {
+      provider: 'google',
+      subject: String(payload.sub),
+      email: normalizeEmail(payload.email),
+      emailVerified: Boolean(payload.email_verified),
+      displayName: defaultDisplayName(payload.email, payload.name),
+    };
+  }
+
+  if (provider === 'github') {
+    const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: new URLSearchParams({
+        code,
+        client_id: config.oauth.github.clientId,
+        client_secret: config.oauth.github.clientSecret,
+        redirect_uri: callbackUrl,
+      }),
+    });
+
+    const tokenJson = await tokenResponse.json();
+    if (!tokenResponse.ok || !tokenJson.access_token) {
+      throw new Error('GitHub OAuth token exchange failed');
+    }
+
+    const accessToken = tokenJson.access_token;
+    const userResponse = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'anime-episode-release-tracker',
+      },
+    });
+    const userJson = await userResponse.json();
+    if (!userResponse.ok || !userJson.id) throw new Error('GitHub user profile fetch failed');
+
+    const emailResponse = await fetch('https://api.github.com/user/emails', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'anime-episode-release-tracker',
+      },
+    });
+    const emailJson = await emailResponse.json();
+    if (!emailResponse.ok || !Array.isArray(emailJson)) throw new Error('GitHub email fetch failed');
+
+    const primary = emailJson.find((entry) => entry.primary) || emailJson[0];
+    if (!primary?.email) throw new Error('GitHub account has no accessible email');
+
+    return {
+      provider: 'github',
+      subject: String(userJson.id),
+      email: normalizeEmail(primary.email),
+      emailVerified: Boolean(primary.verified),
+      displayName: defaultDisplayName(primary.email, userJson.name || userJson.login),
+    };
+  }
+
+  throw new Error('Unsupported OAuth provider');
+}
+
+function findOrCreateOAuthUser(identity, timezone) {
+  let user = findUserByOAuthStmt.get(identity.provider, identity.subject);
+  if (user) return user;
+
+  user = findUserByEmailStmt.get(identity.email);
+  if (!user) {
+    const placeholderPassword = hashPassword(createSessionToken());
+    const insert = createUserStmt.run(
+      identity.email,
+      placeholderPassword,
+      identity.displayName,
+      timezone
+    );
+    user = findUserByIdStmt.get(insert.lastInsertRowid);
+  }
+
+  if (user.oauthProvider && (user.oauthProvider !== identity.provider || user.oauthSubject !== identity.subject)) {
+    throw new Error('Email is already linked to another OAuth identity');
+  }
+
+  updateUserOAuthIdentityStmt.run(
+    identity.provider,
+    identity.subject,
+    identity.emailVerified ? 1 : 0,
+    user.id
+  );
+  updateUserTimezoneStmt.run(timezone, user.id);
+  return findUserByIdStmt.get(user.id);
 }
 
 function isValidTimeZone(timezone) {
@@ -283,6 +472,86 @@ function requireAuth(req, res, next) {
 
 app.get('/api/health', (_, res) => {
   res.json({ ok: true, now: new Date().toISOString() });
+});
+
+app.get('/api/auth/oauth/providers', (_req, res) => {
+  res.json(enabledOAuthProviders());
+});
+
+app.get('/api/auth/oauth/:provider/start', authRateLimit, (req, res) => {
+  const provider = String(req.params.provider || '').toLowerCase();
+  const providers = enabledOAuthProviders();
+  if (!providers[provider]) {
+    return res.status(400).json({ error: `${provider} OAuth is not configured.` });
+  }
+
+  const timezone = String(req.query.timezone || 'UTC').trim() || 'UTC';
+  const safeTimezone = isValidTimeZone(timezone) ? timezone : 'UTC';
+  const state = issueOAuthState(provider);
+  const callbackUrl = buildCallbackUrl(provider);
+
+  if (provider === 'google') {
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    authUrl.search = new URLSearchParams({
+      client_id: config.oauth.google.clientId,
+      redirect_uri: callbackUrl,
+      response_type: 'code',
+      scope: 'openid email profile',
+      state: `${state}|${safeTimezone}`,
+      access_type: 'online',
+      prompt: 'select_account',
+    }).toString();
+    return res.redirect(authUrl.toString());
+  }
+
+  if (provider === 'github') {
+    const authUrl = new URL('https://github.com/login/oauth/authorize');
+    authUrl.search = new URLSearchParams({
+      client_id: config.oauth.github.clientId,
+      redirect_uri: callbackUrl,
+      scope: 'read:user user:email',
+      state: `${state}|${safeTimezone}`,
+    }).toString();
+    return res.redirect(authUrl.toString());
+  }
+
+  return res.status(400).json({ error: 'Unsupported OAuth provider.' });
+});
+
+app.get('/api/auth/oauth/:provider/callback', authRateLimit, async (req, res) => {
+  const provider = String(req.params.provider || '').toLowerCase();
+  const appUrl = new URL(config.appBaseUrl);
+  const rawState = String(req.query.state || '');
+  const code = String(req.query.code || '');
+
+  if (!rawState || !code) {
+    appUrl.searchParams.set('oauthError', 'Missing OAuth callback parameters.');
+    return res.redirect(appUrl.toString());
+  }
+
+  const [stateToken, timezoneFromState] = rawState.split('|');
+  const timezone = isValidTimeZone(timezoneFromState) ? timezoneFromState : 'UTC';
+
+  if (!consumeOAuthState(stateToken, provider)) {
+    appUrl.searchParams.set('oauthError', 'Invalid OAuth state.');
+    return res.redirect(appUrl.toString());
+  }
+
+  try {
+    const identity = await fetchOAuthIdentity(provider, code);
+    if (!identity.emailVerified) {
+      throw new Error('OAuth account email is not verified.');
+    }
+    const user = findOrCreateOAuthUser(identity, timezone);
+    const session = createSessionForUser(user.id);
+
+    appUrl.searchParams.set('oauthToken', session.token);
+    return res.redirect(appUrl.toString());
+  } catch (error) {
+    console.error('OAuth callback failed:', error.message);
+    appUrl.searchParams.set('oauthError', 'OAuth sign-in failed.');
+    return res.redirect(appUrl.toString());
+  }
 });
 
 app.post('/api/auth/register', authRateLimit, (req, res) => {
