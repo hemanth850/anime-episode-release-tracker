@@ -67,6 +67,8 @@ function initDb() {
       display_name TEXT NOT NULL,
       timezone TEXT NOT NULL DEFAULT 'UTC',
       email_verified INTEGER NOT NULL DEFAULT 0,
+      oauth_provider TEXT,
+      oauth_subject TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -94,6 +96,13 @@ function initDb() {
       used_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS oauth_state_tokens (
+      state TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS notification_log (
@@ -124,6 +133,8 @@ function initDb() {
   ensureColumn('episodes', 'external_id', 'TEXT');
   ensureColumn('reminders', 'user_id', 'INTEGER');
   ensureColumn('users', 'email_verified', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn('users', 'oauth_provider', 'TEXT');
+  ensureColumn('users', 'oauth_subject', 'TEXT');
 
   db.exec(`
     DROP INDEX IF EXISTS idx_anime_source_external;
@@ -137,6 +148,9 @@ function initDb() {
     CREATE INDEX IF NOT EXISTS idx_email_verification_expires ON email_verification_tokens(expires_at);
     CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id);
     CREATE INDEX IF NOT EXISTS idx_password_reset_expires ON password_reset_tokens(expires_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oauth_identity ON users(oauth_provider, oauth_subject);
+    CREATE INDEX IF NOT EXISTS idx_oauth_state_provider ON oauth_state_tokens(provider);
+    CREATE INDEX IF NOT EXISTS idx_oauth_state_expires ON oauth_state_tokens(expires_at);
   `);
 
   const animeCount = db.prepare('SELECT COUNT(*) AS count FROM anime').get().count;

@@ -31,4 +31,14 @@ module.exports = {
   auth: {
     sessionDays: Math.max(1, Math.min(180, number(process.env.AUTH_SESSION_DAYS, 30))),
   },
+  oauth: {
+    google: {
+      clientId: process.env.OAUTH_GOOGLE_CLIENT_ID || '',
+      clientSecret: process.env.OAUTH_GOOGLE_CLIENT_SECRET || '',
+    },
+    github: {
+      clientId: process.env.OAUTH_GITHUB_CLIENT_ID || '',
+      clientSecret: process.env.OAUTH_GITHUB_CLIENT_SECRET || '',
+    },
+  },
 };

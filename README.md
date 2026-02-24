@@ -20,6 +20,7 @@ Dashboard showing upcoming anime episode releases, live countdowns, reminders, a
   - automatic browser timezone detection
   - email verification (required before login)
   - forgot password + reset password flow
+  - OAuth sign-in (Google + GitHub)
 - Production/deployment readiness:
   - Dockerfile + docker-compose
   - security middleware (helmet, compression)
@@ -64,6 +65,8 @@ See `.env.example`.
 - `TRUST_PROXY`: proxy hops count (set `1` behind reverse proxy)
 - `RATE_LIMIT_WINDOW_MS`: rate-limit window in ms
 - `RATE_LIMIT_MAX`: max requests per window per IP
+- `OAUTH_GOOGLE_CLIENT_ID`, `OAUTH_GOOGLE_CLIENT_SECRET`: Google OAuth credentials
+- `OAUTH_GITHUB_CLIENT_ID`, `OAUTH_GITHUB_CLIENT_SECRET`: GitHub OAuth credentials
 
 ## API Endpoints
 - `GET /api/health`
@@ -73,6 +76,11 @@ See `.env.example`.
 - `POST /api/auth/verify-email`
 - `POST /api/auth/forgot-password`
 - `POST /api/auth/reset-password`
+- `GET /api/auth/oauth/providers`
+- `GET /api/auth/oauth/google/start`
+- `GET /api/auth/oauth/google/callback`
+- `GET /api/auth/oauth/github/start`
+- `GET /api/auth/oauth/github/callback`
 - `GET /api/auth/me`
 - `POST /api/auth/logout`
 - `GET /api/anime`
@@ -92,6 +100,7 @@ See `.env.example`.
 - Reminder ownership is scoped to signed-in users.
 - Episode release timestamps in UI default to the user/browser timezone automatically.
 - Verification/reset emails are sent through the existing email transport (or dry-run logs if SMTP is not configured).
+- OAuth callbacks redirect back to `APP_BASE_URL` with a short-lived app session token.
 
 ## Deploy With Docker
 1. Build and run:
@@ -115,10 +124,14 @@ See `.env.example`.
    - `APP_BASE_URL=https://your-domain`
    - `CORS_ORIGIN=https://your-domain`
    - SMTP vars for real emails
+   - OAuth vars for Google/GitHub (if enabled)
 2. Put app behind HTTPS reverse proxy (Nginx/Cloud load balancer).
 3. Set `TRUST_PROXY=1` when behind proxy.
 4. Persist `data/` storage (volume/disk mount).
+5. OAuth redirect URI setup:
+   - Google: `https://your-domain/api/auth/oauth/google/callback`
+   - GitHub: `https://your-domain/api/auth/oauth/github/callback`
 
-## Suggested Phase 4
+## Suggested Phase 5
 - Automated tests (API + sync + auth)
-- OAuth sign-in (Google/GitHub)
+- CI/CD pipeline with staging + production
