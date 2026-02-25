@@ -26,6 +26,9 @@ Dashboard showing upcoming anime episode releases, live countdowns, reminders, a
   - security middleware (helmet, compression)
   - API rate limiting
   - configurable CORS/proxy/env settings
+- Quality gates:
+  - integration tests (auth, verification, reset, oauth availability)
+  - GitHub Actions CI on push/PR
 - `.ics` calendar export endpoint
 - Seeded local demo data (kept alongside synced data)
 
@@ -48,6 +51,11 @@ Dashboard showing upcoming anime episode releases, live countdowns, reminders, a
    npm run dev
    ```
 4. Open `http://localhost:4000`
+
+## Run Tests
+```bash
+npm test
+```
 
 ## Environment Variables
 See `.env.example`.
@@ -133,5 +141,4 @@ See `.env.example`.
    - GitHub: `https://your-domain/api/auth/oauth/github/callback`
 
 ## Suggested Phase 5
-- Automated tests (API + sync + auth)
 - CI/CD pipeline with staging + production

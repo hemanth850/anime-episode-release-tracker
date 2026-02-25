@@ -4,7 +4,7 @@
   "description": "Dashboard for anime episode releases with reminders and calendar export",
   "main": "src/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test tests/*.test.js",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js"
   },

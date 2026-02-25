@@ -86,6 +86,11 @@ async function runReminderScan() {
 }
 
 function startScheduler() {
+  if (config.jobs.disableStartup) {
+    console.log('Scheduler disabled via DISABLE_STARTUP_JOBS');
+    return;
+  }
+
   cron.schedule('* * * * *', () => {
     runReminderScan().catch((error) => {
       console.error('Reminder job failed:', error.message);
