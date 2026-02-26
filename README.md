@@ -29,6 +29,7 @@ Dashboard showing upcoming anime episode releases, live countdowns, reminders, a
 - Quality gates:
   - integration tests (auth, verification, reset, oauth availability)
   - GitHub Actions CI on push/PR
+  - GitHub Actions CD (staging/prod image publish + optional deploy hooks)
 - `.ics` calendar export endpoint
 - Seeded local demo data (kept alongside synced data)
 
@@ -140,5 +141,24 @@ See `.env.example`.
    - Google: `https://your-domain/api/auth/oauth/google/callback`
    - GitHub: `https://your-domain/api/auth/oauth/github/callback`
 
+## CI/CD Pipeline
+- CI workflow: `.github/workflows/ci.yml`
+  - Runs tests on push + PR.
+- CD workflow: `.github/workflows/cd.yml`
+  - On `main`: builds/pushes `ghcr.io/<owner>/<repo>:staging-latest`
+  - On tag `v*`: builds/pushes production image tags (`latest`, tag, sha)
+  - Manual dispatch supports `staging`, `production`, `both`
+  - Optional deploy hooks for platform-specific rollout
+
+### Required GitHub Setup
+1. Enable GitHub Actions environments:
+   - `staging`
+   - `production`
+2. Configure secrets:
+   - `STAGING_DEPLOY_HOOK` (optional)
+   - `PRODUCTION_DEPLOY_HOOK` (optional)
+3. Ensure `GITHUB_TOKEN` has package write permission (workflow already requests it).
+4. If using protected production deploys, add required reviewers on the `production` environment.
+
 ## Suggested Phase 5
-- CI/CD pipeline with staging + production
+- Observability (structured logs + error tracking + uptime checks)
