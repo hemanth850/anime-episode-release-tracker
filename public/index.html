@@ -3,164 +3,50 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Anime Episode Release Tracker</title>
+    <meta name="description" content="A live anime release calendar with upcoming episode times, local-time countdowns, search, and iCalendar export. Powered by AniList." />
+    <meta name="theme-color" content="#080b12" />
+    <meta property="og:title" content="Anime Release Calendar | Upcoming Episodes" />
+    <meta property="og:description" content="See upcoming anime episode release times in your local timezone." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://anime.hemanthga.com" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="canonical" href="https://anime.hemanthga.com" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"WebApplication","name":"Anime Release Calendar","applicationCategory":"EntertainmentApplication","operatingSystem":"Web","url":"https://anime.hemanthga.com","description":"Live upcoming anime episode release times, countdowns, and calendar export."}
+    </script>
+    <title>Anime Release Calendar | Upcoming Episodes</title>
   </head>
   <body>
-    <div class="bg-glow"></div>
-    <header>
-      <h1>Anime Episode Release Tracker</h1>
-      <p>Track upcoming drops, countdown to release time, and automate reminders.</p>
-      <div class="theme-control">
-        <label>
-          Theme
-          <select id="themeSelect">
-            <option value="dark" selected>Dark</option>
-            <option value="light">Light</option>
-          </select>
-        </label>
-      </div>
+    <a class="skip-link" href="#calendar">Skip to releases</a>
+    <header class="site-header shell">
+      <a class="brand" href="/" aria-label="Anime Release Calendar home">ANI<span>TIME</span></a>
+      <a class="portfolio-link" href="https://hemanthga.com/projects/anime-release-tracker">A project by Hemanth G A</a>
     </header>
-
     <main>
-      <section class="panel">
-        <div class="panel-head">
-          <h2>Upcoming Episodes</h2>
-          <div class="episode-controls">
-            <label>
-              Fetch Window
-              <select id="daysSelect">
-                <option value="7">7 days</option>
-                <option value="14" selected>14 days</option>
-                <option value="30">30 days</option>
-              </select>
-            </label>
-            <label>
-              Sort By
-              <select id="sortSelect">
-                <option value="release" selected>Release Time</option>
-                <option value="popularity">Popularity (High to Low)</option>
-              </select>
-            </label>
-          </div>
-        </div>
-        <div id="episodeFilters" class="filter-row">
-          <button type="button" class="filter-chip active" data-filter="24h">Next 24h</button>
-          <button type="button" class="filter-chip" data-filter="tomorrow">Tomorrow</button>
-          <button type="button" class="filter-chip" data-filter="3d">Next 3 days</button>
-          <button type="button" class="filter-chip" data-filter="7d">Next 7 days</button>
-          <button type="button" class="filter-chip" data-filter="all">All in window</button>
-        </div>
-        <div id="episodesGrid" class="episodes-grid"></div>
+      <section class="hero shell">
+        <p class="eyebrow"><span class="signal"></span> LIVE SCHEDULE DATA</p>
+        <h1>Never miss the next <em>episode.</em></h1>
+        <p class="hero-copy">A live anime release calendar that turns upcoming airing schedules into a clear, local-time view. No account required.</p>
+        <div class="hero-meta"><span id="timezoneLabel">Your timezone</span><span>Powered by AniList</span><span id="updatedLabel">Loading schedule</span></div>
       </section>
-
-      <section class="panel split">
-        <div>
-          <h2>Account</h2>
-          <div id="authPanel">
-            <p id="authStatus" class="muted"></p>
-            <form id="authForm">
-              <label>
-                Mode
-                <select id="authMode">
-                  <option value="login">Login</option>
-                  <option value="register">Register</option>
-                </select>
-              </label>
-              <label id="displayNameWrap" class="hidden">
-                Display name
-                <input id="displayName" type="text" placeholder="Your name" />
-              </label>
-              <label>
-                Email
-                <input id="authEmail" type="email" placeholder="you@example.com" required />
-              </label>
-              <label>
-                Password
-                <input id="authPassword" type="password" placeholder="At least 8 characters" required />
-              </label>
-              <div class="inline-actions">
-                <button type="submit" id="authSubmitBtn">Continue</button>
-                <button type="button" class="secondary" id="logoutBtn">Logout</button>
-              </div>
-            </form>
-            <div class="inline-actions auth-tools">
-              <button type="button" class="secondary" id="resendVerificationBtn">Resend Verification</button>
-              <button type="button" class="secondary" id="forgotPasswordBtn">Send Reset Link</button>
-            </div>
-            <div class="inline-actions auth-tools">
-              <button type="button" class="secondary hidden" id="oauthGoogleBtn">Continue with Google</button>
-              <button type="button" class="secondary hidden" id="oauthGithubBtn">Continue with GitHub</button>
-            </div>
-            <form id="resetPasswordForm">
-              <label>
-                Reset Token
-                <input id="resetTokenInput" type="text" placeholder="Paste reset token or use link param" />
-              </label>
-              <label>
-                New Password
-                <input id="newPasswordInput" type="password" placeholder="At least 8 characters" />
-              </label>
-              <button type="submit" class="secondary" id="resetPasswordBtn">Reset Password</button>
-            </form>
-          </div>
-
-          <h2>Create Reminder</h2>
-          <form id="reminderForm">
-            <label>
-              Anime (optional)
-              <select id="animeSelect"></select>
-            </label>
-            <label>
-              Minutes before release
-              <input id="minutesBefore" type="number" min="5" max="1440" value="60" required />
-            </label>
-            <label>
-              Email (optional)
-              <input id="email" type="email" placeholder="you@example.com" />
-            </label>
-            <label>
-              Discord Webhook (optional)
-              <input id="discordWebhookUrl" type="url" placeholder="https://discord.com/api/webhooks/..." />
-            </label>
-            <button type="submit">Save Reminder</button>
-          </form>
-          <p class="muted">Provide at least one channel: email or Discord webhook.</p>
+      <section id="calendar" class="calendar-section shell" aria-labelledby="calendarTitle">
+        <div class="section-heading"><div><p class="eyebrow">UPCOMING RELEASES</p><h2 id="calendarTitle">Your release queue</h2></div><button id="calendarExport" class="export-button" type="button" disabled>Download calendar (.ics)</button></div>
+        <div class="controls" aria-label="Release filters">
+          <label class="search-control"><span class="sr-only">Search anime</span><input id="searchInput" type="search" placeholder="Search an anime" autocomplete="off" /></label>
+          <div id="dayFilters" class="filter-group" aria-label="Time window"><button class="filter active" type="button" data-window="24">24 hours</button><button class="filter" type="button" data-window="72">3 days</button><button class="filter" type="button" data-window="168">This week</button><button class="filter" type="button" data-window="336">2 weeks</button></div>
+          <label class="select-control"><span>Sort</span><select id="sortSelect"><option value="time">Release time</option><option value="popularity">Popularity</option><option value="score">Score</option></select></label>
         </div>
-
-        <div>
-          <h2>Calendar Export</h2>
-          <p class="muted"><strong>Data source:</strong> Local + AniList upcoming airing schedule.</p>
-          <button id="syncBtn" class="secondary">Sync from AniList</button>
-          <p id="syncStatus" class="muted"></p>
-          <p class="muted">Download an iCal file and subscribe in Google Calendar, Apple Calendar, or Outlook.</p>
-          <button id="calendarBtn">Download .ics</button>
-
-          <h3>Reminders</h3>
-          <ul id="remindersList" class="reminders-list"></ul>
-        </div>
+        <p id="statusMessage" class="status-message" role="status">Fetching current release schedules...</p>
+        <div id="releaseGrid" class="release-grid" aria-live="polite"></div>
+        <template id="releaseTemplate"><article class="release-card"><img class="cover" alt="" loading="lazy" /><div class="card-content"><div class="card-topline"><span class="episode-label"></span><span class="format-label"></span></div><h3 class="anime-title"></h3><p class="release-time"></p><p class="countdown"></p><div class="card-footer"><span class="score"></span><a class="anilist-link" target="_blank" rel="noreferrer">AniList <span aria-hidden="true">&nearr;</span></a></div></div></article></template>
       </section>
+      <section class="how-it-works shell" aria-labelledby="howTitle"><p class="eyebrow">SIMPLE BY DESIGN</p><h2 id="howTitle">Live data, on your time.</h2><div class="principles"><article><span>01</span><h3>Live schedule</h3><p>The latest upcoming airing data is fetched from AniList when you open the calendar.</p></article><article><span>02</span><h3>Your timezone</h3><p>Release timestamps and countdowns automatically use your browser's local timezone.</p></article><article><span>03</span><h3>Your calendar</h3><p>Download the releases you are viewing as an iCalendar file for your preferred calendar app.</p></article></div></section>
     </main>
-
-    <template id="episodeCardTemplate">
-      <article class="episode-card">
-        <div class="poster-wrap">
-          <img class="poster-img" alt="" loading="lazy" />
-        </div>
-        <div class="card-head">
-          <p class="chip"></p>
-          <p class="pop-badge"></p>
-        </div>
-        <h3></h3>
-        <p class="episode-title"></p>
-        <p class="release-at"></p>
-        <p class="countdown"></p>
-      </article>
-    </template>
-
-    <script src="app.js"></script>
+    <footer class="site-footer shell"><span>Data provided by AniList.</span><a href="https://hemanthga.com">hemanthga.com</a></footer>
+    <script src="/app.js"></script>
   </body>
 </html>
