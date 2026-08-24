@@ -31,18 +31,18 @@
         <p class="eyebrow"><span class="signal"></span> LIVE SCHEDULE DATA</p>
         <h1>Never miss the next <em>episode.</em></h1>
         <p class="hero-copy">A live anime release calendar that turns upcoming airing schedules into a clear, local-time view. No account required.</p>
-        <div class="hero-meta"><span id="timezoneLabel">Your timezone</span><span>Powered by AniList</span><span id="updatedLabel">Loading schedule</span></div>
+        <div class="hero-meta"><span id="timezoneLabel">Your timezone</span><span>Powered by AniList</span><span id="updatedLabel">Loading schedule</span><button id="refreshSchedule" class="refresh-button" type="button">Refresh schedule</button></div>
       </section>
       <section id="calendar" class="calendar-section shell" aria-labelledby="calendarTitle">
         <div class="section-heading"><div><p class="eyebrow">UPCOMING RELEASES</p><h2 id="calendarTitle">Your release queue</h2></div><button id="calendarExport" class="export-button" type="button" disabled>Download calendar (.ics)</button></div>
         <div class="controls" aria-label="Release filters">
           <label class="search-control"><span class="sr-only">Search anime</span><input id="searchInput" type="search" placeholder="Search an anime" autocomplete="off" /></label>
-          <div id="dayFilters" class="filter-group" aria-label="Time window"><button class="filter active" type="button" data-window="24">24 hours</button><button class="filter" type="button" data-window="72">3 days</button><button class="filter" type="button" data-window="168">This week</button><button class="filter" type="button" data-window="336">2 weeks</button></div>
+          <div id="dayFilters" class="filter-group" aria-label="Time window"><button class="filter active" type="button" data-window="24">24 hours</button><button class="filter" type="button" data-window="72">3 days</button><button class="filter" type="button" data-window="168">This week</button><button class="filter" type="button" data-window="336">2 weeks</button><button class="filter" type="button" data-window="favorites">Saved</button></div>
           <label class="select-control"><span>Sort</span><select id="sortSelect"><option value="time">Release time</option><option value="popularity">Popularity</option><option value="score">Score</option></select></label>
         </div>
         <p id="statusMessage" class="status-message" role="status">Fetching current release schedules...</p>
         <div id="releaseGrid" class="release-grid" aria-live="polite"></div>
-        <template id="releaseTemplate"><article class="release-card"><img class="cover" alt="" loading="lazy" /><div class="card-content"><div class="card-topline"><span class="episode-label"></span><span class="format-label"></span></div><h3 class="anime-title"></h3><p class="release-time"></p><p class="countdown"></p><div class="card-footer"><span class="score"></span><a class="anilist-link" target="_blank" rel="noreferrer">AniList <span aria-hidden="true">&nearr;</span></a></div></div></article></template>
+        <template id="releaseTemplate"><article class="release-card"><img class="cover" alt="" loading="lazy" /><div class="card-content"><div class="card-topline"><span class="episode-label"></span><span class="format-label"></span></div><h3 class="anime-title"></h3><p class="release-time"></p><p class="countdown"></p><div class="card-footer"><span class="score"></span><button class="favorite-button" type="button" aria-pressed="false"><span aria-hidden="true">+</span> Save</button><a class="anilist-link" target="_blank" rel="noreferrer">AniList <span aria-hidden="true">&nearr;</span></a></div></div></article></template>
       </section>
       <section class="how-it-works shell" aria-labelledby="howTitle"><p class="eyebrow">SIMPLE BY DESIGN</p><h2 id="howTitle">Live data, on your time.</h2><div class="principles"><article><span>01</span><h3>Live schedule</h3><p>The latest upcoming airing data is fetched from AniList when you open the calendar.</p></article><article><span>02</span><h3>Your timezone</h3><p>Release timestamps and countdowns automatically use your browser's local timezone.</p></article><article><span>03</span><h3>Your calendar</h3><p>Download the releases you are viewing as an iCalendar file for your preferred calendar app.</p></article></div></section>
     </main>
